@@ -64,7 +64,7 @@ cp .env.example .env
 ```bash
 GEMINI_API_KEY=你的 Gemini API Key
 GEMINI_TEXT_MODEL=gemini-2.5-flash
-GEMINI_IMAGE_MODEL=gemini-3-pro-image-preview
+GEMINI_IMAGE_MODEL=gemini-2.5-flash-image-preview
 ```
 
 注意：`.env` 只用于本地运行，不要提交到 GitHub。
@@ -106,4 +106,3 @@ https://你的域名/api/health
 ## 项目说明
 
 这是一个围绕「宠物离别后的情感归宿」设计的 AI 产品原型。它将宠物建档、星星纸条、星星瓶和远方明信片串联成一个完整的告别体验，重点探索 AI 在情感陪伴场景中如何做到温柔、有边界、可保存。
-

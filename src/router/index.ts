@@ -1,5 +1,6 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import Home from '../views/Home.vue'
+import Landing from '../views/Landing.vue'
 
 const router = createRouter({
   /* AI-DO-NOT-MODIFY-THIS-CODE-START */
@@ -8,6 +9,11 @@ const router = createRouter({
   routes: [
     {
       path: '/',
+      name: 'landing',
+      component: Landing,
+    },
+    {
+      path: '/home',
       name: 'home',
       component: Home,
     },
@@ -41,8 +47,8 @@ const router = createRouter({
 
 // 如果未建档，重定向到建档页
 router.beforeEach((to) => {
-  const isOnboarding = to.name === 'onboarding'
-  if (isOnboarding) return
+  const isPublicPage = to.name === 'landing' || to.name === 'onboarding'
+  if (isPublicPage) return
 
   const raw = localStorage.getItem('heaven-diary')
   if (!raw) return { name: 'onboarding' }

@@ -4,7 +4,10 @@ const geminiApiKey = process.env.GEMINI_API_KEY
 const client = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : null
 
 export const textModel = process.env.GEMINI_TEXT_MODEL || 'gemini-2.5-flash'
-export const imageModel = process.env.GEMINI_IMAGE_MODEL || 'gemini-3-pro-image-preview'
+const configuredImageModel = process.env.GEMINI_IMAGE_MODEL || 'gemini-2.5-flash-image-preview'
+export const imageModel = configuredImageModel.includes('3-pro-image')
+  ? 'gemini-2.5-flash-image-preview'
+  : configuredImageModel
 
 export function hasGeminiKey() {
   return Boolean(client)
@@ -56,6 +59,21 @@ function extractImageFromOutputs(outputs) {
   return `data:${imageOutput.mime_type || 'image/png'};base64,${imageOutput.data}`
 }
 
+function extractImageFromGenerateContent(response) {
+  const parts = response?.candidates?.[0]?.content?.parts || []
+  const imagePart = parts.find((part) => part?.inlineData?.data)
+  if (!imagePart?.inlineData?.data) return null
+  return `data:${imagePart.inlineData.mimeType || 'image/png'};base64,${imagePart.inlineData.data}`
+}
+
+function withTimeout(promise, ms, label = '请求超时') {
+  let timer
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(label)), ms)
+  })
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
+}
+
 export async function generateText(prompt) {
   if (!prompt) throw new Error('缺少 prompt')
 
@@ -82,15 +100,18 @@ export async function editImage(prompt, imageBase64) {
   }
 
   const { mime, buffer } = normalizeBase64Image(imageBase64)
-  const result = await client.interactions.create({
+  const result = await withTimeout(client.models.generateContent({
     model: imageModel,
-    input: [
-      { type: 'text', text: prompt },
-      { type: 'image', data: bufferToBase64(buffer), mime_type: mime },
-    ],
-    response_modalities: ['image'],
-  })
-  const image = extractImageFromOutputs(result.outputs)
+    contents: [{
+      role: 'user',
+      parts: [
+        { text: prompt },
+        { inlineData: { data: bufferToBase64(buffer), mimeType: mime } },
+      ],
+    }],
+    config: { responseModalities: ['IMAGE'] },
+  }), 45_000, '图片生成超时，请稍后重试')
+  const image = extractImageFromGenerateContent(result)
   if (!image) throw new Error('模型未返回图片')
   return { image }
 }
@@ -102,13 +123,12 @@ export async function generateImage(prompt) {
     return { image: fallbackSvgDataUrl('远方来信'), fallback: true }
   }
 
-  const result = await client.interactions.create({
+  const result = await withTimeout(client.models.generateContent({
     model: imageModel,
-    input: prompt,
-    response_modalities: ['image'],
-  })
-  const image = extractImageFromOutputs(result.outputs)
+    contents: prompt,
+    config: { responseModalities: ['IMAGE'] },
+  }), 45_000, '图片生成超时，请稍后重试')
+  const image = extractImageFromGenerateContent(result)
   if (!image) throw new Error('模型未返回图片')
   return { image }
 }
-

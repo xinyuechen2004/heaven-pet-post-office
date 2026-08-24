@@ -1,5 +1,9 @@
 import { generateImage } from '../_gemini.mjs'
 
+export const config = {
+  maxDuration: 60,
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: '只支持 POST 请求' })
@@ -14,4 +18,3 @@ export default async function handler(req, res) {
     res.status(500).json({ error: error?.message || '图片生成失败' })
   }
 }
-

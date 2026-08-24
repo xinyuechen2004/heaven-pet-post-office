@@ -130,6 +130,9 @@
               <img :src="avatarResult" class="w-full h-full object-cover" alt="" />
             </div>
             <p class="text-xs text-faint-gray">内容由 AI 生成</p>
+            <p v-if="genError" class="text-sm text-dusty-rose leading-relaxed">
+              {{ genError }}
+            </p>
 
             <div class="flex gap-4 justify-center pt-4">
               <button
@@ -596,7 +599,10 @@ async function generateAvatar() {
     avatarResult.value = result
     initialAvatar.value = result // 保存第一版头像
   } catch (e: any) {
-    genError.value = e.message || '生成失败，请稍后再试'
+    const mainPhoto = photos.value[0]?.base64 || photos.value[0]?.preview
+    avatarResult.value = mainPhoto
+    initialAvatar.value = mainPhoto
+    genError.value = 'AI 画像暂时没有生成成功，已先使用你上传的照片继续建档。你也可以返回重试。'
   } finally {
     generating.value = false
   }
@@ -680,8 +686,9 @@ async function generateCharacterCards() {
 
     const filtered = results.filter(Boolean) as string[]
     if (filtered.length === 0) {
-      cardError.value = '所有视角生成失败，请重试'
-      characterCards.value = []
+      cardError.value = 'AI 视角图暂时没有生成成功，已先使用头像继续完成建档。'
+      const fallback = avatarResult.value || photos.value[0]?.base64
+      characterCards.value = fallback ? [fallback, fallback, fallback, fallback] : []
     } else {
       // 补齐到 4 张：缺失的用已有图片填充
       const filled: string[] = []

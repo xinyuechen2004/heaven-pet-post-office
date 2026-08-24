@@ -1,8 +1,15 @@
+function timeoutSignal(ms: number): AbortSignal {
+  const controller = new AbortController()
+  window.setTimeout(() => controller.abort(), ms)
+  return controller.signal
+}
+
 export async function generateImageFromReference(prompt: string, imageBase64: string): Promise<string> {
   const res = await fetch('/api/image/edit', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ prompt, imageBase64 }),
+    signal: timeoutSignal(55_000),
   })
 
   const data = await res.json().catch(() => null)
@@ -18,6 +25,7 @@ export async function generateImage(prompt: string): Promise<string> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ prompt }),
+    signal: timeoutSignal(55_000),
   })
 
   const data = await res.json().catch(() => null)
