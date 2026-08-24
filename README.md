@@ -64,7 +64,7 @@ cp .env.example .env
 ```bash
 GEMINI_API_KEY=你的 Gemini API Key
 GEMINI_TEXT_MODEL=gemini-2.5-flash
-GEMINI_IMAGE_MODEL=gemini-2.5-flash-image-preview
+GEMINI_IMAGE_MODEL=gemini-2.5-flash-image
 ```
 
 注意：`.env` 只用于本地运行，不要提交到 GitHub。

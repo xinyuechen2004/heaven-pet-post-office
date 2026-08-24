@@ -5,9 +5,9 @@ const client = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : null
 
 export const textModel = process.env.GEMINI_TEXT_MODEL || 'gemini-2.5-flash'
 const configuredImageModel = process.env.GEMINI_IMAGE_MODEL || 'gemini-2.5-flash-image-preview'
-export const imageModel = configuredImageModel.includes('3-pro-image')
-  ? 'gemini-2.5-flash-image-preview'
-  : configuredImageModel
+export const imageModel = configuredImageModel
+  .replace('gemini-3-pro-image-preview', 'gemini-2.5-flash-image')
+  .replace('gemini-2.5-flash-image-preview', 'gemini-2.5-flash-image')
 
 export function hasGeminiKey() {
   return Boolean(client)
