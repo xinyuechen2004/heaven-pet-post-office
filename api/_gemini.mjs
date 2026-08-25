@@ -2,15 +2,20 @@ import { GoogleGenAI } from '@google/genai'
 
 const geminiApiKey = process.env.GEMINI_API_KEY
 const client = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : null
+const siliconFlowApiKey = process.env.SILICONFLOW_API_KEY
+const siliconFlowBaseUrl = process.env.SILICONFLOW_BASE_URL || 'https://api.siliconflow.cn/v1'
 
 export const textModel = process.env.GEMINI_TEXT_MODEL || 'gemini-2.5-flash'
-const configuredImageModel = process.env.GEMINI_IMAGE_MODEL || 'gemini-2.5-flash-image-preview'
-export const imageModel = configuredImageModel
-  .replace('gemini-3-pro-image-preview', 'gemini-2.5-flash-image')
-  .replace('gemini-2.5-flash-image-preview', 'gemini-2.5-flash-image')
+export const imageModel = process.env.SILICONFLOW_IMAGE_MODEL || 'Qwen/Qwen-Image-Edit-2509'
+export const textToImageModel = process.env.SILICONFLOW_TEXT_TO_IMAGE_MODEL || 'Kwai-Kolors/Kolors'
+export const imageProvider = siliconFlowApiKey ? 'siliconflow' : 'gemini-fallback'
 
 export function hasGeminiKey() {
   return Boolean(client)
+}
+
+export function hasSiliconFlowKey() {
+  return Boolean(siliconFlowApiKey)
 }
 
 export function fallbackSvgDataUrl(label = 'TA') {
@@ -74,6 +79,68 @@ function withTimeout(promise, ms, label = '请求超时') {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
 }
 
+async function fetchSiliconFlowImage(payload) {
+  if (!siliconFlowApiKey) {
+    throw new Error('缺少 SILICONFLOW_API_KEY')
+  }
+
+  const response = await withTimeout(fetch(`${siliconFlowBaseUrl}/images/generations`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${siliconFlowApiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  }), 58_000, '硅基流动图片生成超时，请稍后重试')
+
+  const data = await response.json().catch(() => null)
+  if (!response.ok) {
+    const message = data?.message || data?.error?.message || data?.data || response.statusText
+    throw new Error(`硅基流动图片生成失败：${message}`)
+  }
+
+  const imageUrl = data?.images?.[0]?.url
+  if (!imageUrl) {
+    throw new Error('硅基流动未返回图片地址')
+  }
+
+  const imageResponse = await withTimeout(fetch(imageUrl), 20_000, '下载生成图片超时')
+  if (!imageResponse.ok) {
+    throw new Error(`下载生成图片失败：${imageResponse.status}`)
+  }
+
+  const contentType = imageResponse.headers.get('content-type') || 'image/png'
+  const arrayBuffer = await imageResponse.arrayBuffer()
+  return `data:${contentType};base64,${Buffer.from(arrayBuffer).toString('base64')}`
+}
+
+async function editImageWithSiliconFlow(prompt, imageBase64) {
+  return {
+    image: await fetchSiliconFlowImage({
+      model: imageModel,
+      prompt,
+      image: imageBase64,
+      num_inference_steps: 20,
+      guidance_scale: 4,
+    }),
+    provider: 'siliconflow',
+  }
+}
+
+async function generateImageWithSiliconFlow(prompt) {
+  return {
+    image: await fetchSiliconFlowImage({
+      model: textToImageModel,
+      prompt,
+      image_size: '1024x1024',
+      batch_size: 1,
+      num_inference_steps: 20,
+      guidance_scale: 7.5,
+    }),
+    provider: 'siliconflow',
+  }
+}
+
 export async function generateText(prompt) {
   if (!prompt) throw new Error('缺少 prompt')
 
@@ -94,6 +161,10 @@ export async function generateText(prompt) {
 
 export async function editImage(prompt, imageBase64) {
   if (!prompt || !imageBase64) throw new Error('缺少 prompt 或图片')
+
+  if (siliconFlowApiKey) {
+    return editImageWithSiliconFlow(prompt, imageBase64)
+  }
 
   if (!client) {
     return { image: imageBase64, fallback: true }
@@ -118,6 +189,10 @@ export async function editImage(prompt, imageBase64) {
 
 export async function generateImage(prompt) {
   if (!prompt) throw new Error('缺少 prompt')
+
+  if (siliconFlowApiKey) {
+    return generateImageWithSiliconFlow(prompt)
+  }
 
   if (!client) {
     return { image: fallbackSvgDataUrl('远方来信'), fallback: true }

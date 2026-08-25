@@ -64,7 +64,10 @@ cp .env.example .env
 ```bash
 GEMINI_API_KEY=你的 Gemini API Key
 GEMINI_TEXT_MODEL=gemini-2.5-flash
-GEMINI_IMAGE_MODEL=gemini-2.5-flash-image
+SILICONFLOW_API_KEY=你的 SiliconFlow API Key
+SILICONFLOW_BASE_URL=https://api.siliconflow.cn/v1
+SILICONFLOW_IMAGE_MODEL=Qwen/Qwen-Image-Edit-2509
+SILICONFLOW_TEXT_TO_IMAGE_MODEL=Kwai-Kolors/Kolors
 ```
 
 注意：`.env` 只用于本地运行，不要提交到 GitHub。
@@ -92,7 +95,10 @@ Output Directory: dist
 ```txt
 GEMINI_API_KEY
 GEMINI_TEXT_MODEL
-GEMINI_IMAGE_MODEL
+SILICONFLOW_API_KEY
+SILICONFLOW_BASE_URL
+SILICONFLOW_IMAGE_MODEL
+SILICONFLOW_TEXT_TO_IMAGE_MODEL
 ```
 
 部署完成后，可以访问：
@@ -101,7 +107,7 @@ GEMINI_IMAGE_MODEL
 https://你的域名/api/health
 ```
 
-如果返回 `"gemini": true`，说明线上 AI 接口配置成功。
+如果返回 `"gemini": true` 且 `"siliconflow": true`，说明线上 AI 接口配置成功。
 
 ## 项目说明
 
