@@ -594,7 +594,7 @@ async function startGenerateAvatar() {
 async function generateAvatar() {
   try {
     const mainPhoto = photos.value[0].base64
-    const prompt = `把参考照片中的宠物做成忠实转绘头像：只把照片转换成柔和插画质感，不重新设计、不美化、不萌化。必须严格保留原照片里的五官比例、眼睛大小、眼距、脸型宽窄、头身比例、胖瘦、年龄感、耳朵形状、毛色、花纹位置、眼睛颜色、鼻口颜色和项圈细节。眼睛绝对不能放大，脸不能变圆，身体不能变幼。风格是轻度仿真卡通、温柔明信片插画，不要照片级真实、不要3D、不要Q版、不要拟人化、不要夸张表情。干净浅奶油色背景，不要翅膀、光环、天堂元素、文字、水印。`
+    const prompt = `把参考照片中的宠物做成写实线条插画头像，像专业宠物肖像师按照片临摹，不做重新设计。必须严格保留原照片的真实比例：眼睛大小、眼距、瞳孔形状、脸型宽窄、鼻子大小、嘴巴位置、耳朵大小和角度、头身比例、胖瘦、年龄感、毛色、虎斑花纹位置、眼睛颜色、鼻口颜色和项圈细节。不要美化，不要萌化，不要把眼睛画大，不要把脸画圆，不要幼态化，不要改成可爱头像。风格要求：清晰线条、写实插画、自然毛发纹理、真实五官比例、干净浅色背景。不要照片级真实、不要3D、不要Q版、不要拟人化、不要夸张表情、不要翅膀、光环、天堂元素、文字、水印。`
     const taskId = await imageGenImage(prompt, mainPhoto)
     generatingText.value = '正在勾勒 TA 的轮廓...'
     const result = await pollImageGenImage(taskId)
@@ -626,7 +626,7 @@ async function handleFineTune() {
   tuning.value = true
   tuneError.value = ''
   try {
-    let prompt = '在保持同一只宠物身份完全一致的前提下，调整这张仿真卡通宠物头像，'
+    let prompt = '在保持同一只宠物身份完全一致的前提下，调整这张写实线条宠物头像，'
     if (fineTuneText.value.trim()) {
       prompt += fineTuneText.value.trim() + '。'
     }
@@ -638,7 +638,7 @@ async function handleFineTune() {
       }
     }
     if (changes.length) prompt += changes.join('，') + '。'
-    prompt += '保持忠实转绘的轻度仿真卡通风格，不重新设计、不美化、不萌化；必须保留原有五官比例、眼睛大小、眼距、脸型宽窄、头身比例、胖瘦、年龄感、毛色、花纹位置、眼睛颜色和项圈等身份特征。'
+    prompt += '保持按照片临摹的写实线条插画风格，不重新设计、不美化、不萌化；必须保留原有五官比例、眼睛大小、眼距、脸型宽窄、头身比例、胖瘦、年龄感、毛色、花纹位置、眼睛颜色和项圈等身份特征。'
 
     const taskId = await imageGenImage(prompt, avatarResult.value!)
     const result = await pollImageGenImage(taskId)
@@ -659,7 +659,7 @@ async function generateCharacterCards() {
   characterCards.value = []
   try {
     const refImage = avatarResult.value || photos.value[0]?.base64
-    const basePrompt = `基于参考图生成同一只宠物的忠实转绘全身角色图，适合后续放进明信片场景。硬性要求：必须是同一只宠物，不能重新设计、不美化、不萌化；必须保持参考图的五官比例、眼睛大小、眼距、脸型宽窄、头身比例、胖瘦、年龄感、耳朵形状、毛色、花纹位置、眼睛颜色、鼻口颜色和项圈。眼睛绝对不能放大，脸不能变圆，身体不能变幼，不要把幼猫画成成年猫或换成另一只猫。风格是轻度仿真卡通、温柔明信片插画，不要照片级真实、不要3D、不要Q版、不要拟人化。完整展示从头到尾巴的整只动物。纯白或透明背景，不能有黄色笔触、色块、地面阴影、装饰背景、文字、水印`
+    const basePrompt = `基于参考图生成同一只宠物的写实线条全身角色图，像专业宠物肖像师按参考图临摹。硬性要求：必须是同一只宠物，不能重新设计、不美化、不萌化；必须保持参考图的真实比例：眼睛大小、眼距、瞳孔形状、脸型宽窄、鼻子大小、嘴巴位置、耳朵大小和角度、头身比例、胖瘦、年龄感、毛色、虎斑花纹位置、眼睛颜色、鼻口颜色和项圈。眼睛绝对不能放大，脸不能变圆，身体不能变幼，不要换成另一只猫。风格要求：清晰线条、写实插画、自然毛发纹理、真实五官和身体比例。完整展示从头到尾巴的整只动物。纯白或透明背景，不能有黄色笔触、色块、地面阴影、装饰背景、文字、水印`
 
     const views = [
       `${basePrompt}。视角1：三分之二侧身坐姿，表情自然安静，全身完整，尾巴完整可见`,
@@ -714,7 +714,7 @@ async function regenerateSelectedCards() {
   tuneMode.value = 'generating'
   tuneGenError.value = ''
   const refImage = avatarResult.value || photos.value[0]?.base64
-  const basePrompt = `基于参考图生成同一只宠物的忠实转绘全身角色图。硬性要求：必须是同一只宠物，不能重新设计、不美化、不萌化；必须保持参考图的五官比例、眼睛大小、眼距、脸型宽窄、头身比例、胖瘦、年龄感、耳朵形状、毛色、花纹位置、眼睛颜色、鼻口颜色和项圈。眼睛绝对不能放大，脸不能变圆，身体不能变幼。风格是轻度仿真卡通、温柔明信片插画，不要照片级真实、不要3D、不要Q版、不要拟人化。完整展示从头到尾巴的整只动物。纯白或透明背景，不能有黄色笔触、色块、地面阴影、装饰背景、文字、水印`
+  const basePrompt = `基于参考图生成同一只宠物的写实线条全身角色图，像专业宠物肖像师按参考图临摹。硬性要求：必须是同一只宠物，不能重新设计、不美化、不萌化；必须保持参考图的真实比例：眼睛大小、眼距、瞳孔形状、脸型宽窄、鼻子大小、嘴巴位置、耳朵大小和角度、头身比例、胖瘦、年龄感、毛色、虎斑花纹位置、眼睛颜色、鼻口颜色和项圈。眼睛绝对不能放大，脸不能变圆，身体不能变幼。风格要求：清晰线条、写实插画、自然毛发纹理、真实五官和身体比例。完整展示从头到尾巴的整只动物。纯白或透明背景，不能有黄色笔触、色块、地面阴影、装饰背景、文字、水印`
 
   const viewPrompts = [
     `${basePrompt}。视角1：三分之二侧身坐姿，表情自然安静，全身完整，尾巴完整可见`,
@@ -767,7 +767,7 @@ async function generatePostcardScene(postcardId: string, charCards: string[]): P
   const sceneDesc = SCENE_PROMPTS[postcard.illustration] || '在温暖梦幻的自然场景中'
   const bestIdx = getBestPerspectiveForScene(postcard.illustration)
   const refCard = charCards[bestIdx] || charCards[0]
-  const prompt = `将参考图中的同一只宠物完整地放在以下明信片场景中：${sceneDesc}。必须保留宠物身份特征：五官比例、眼睛大小、眼距、脸型、头身比例、胖瘦、年龄感、毛色、花纹位置、眼睛颜色、耳朵和项圈，不能美化、萌化或换成另一只动物。宠物在画面中最多占四分之一，是一个轻度仿真卡通、温柔插画质感的小身影，自然融入场景，不要像照片硬贴上去。整体是统一的明信片插画风格，柔和自然光，画面安全温馨美好。不要文字、水印、翅膀、光环。`
+  const prompt = `将参考图中的同一只宠物完整地放在以下明信片场景中：${sceneDesc}。必须保留宠物身份特征：眼睛大小、眼距、脸型、头身比例、胖瘦、年龄感、毛色、花纹位置、眼睛颜色、耳朵和项圈，不能美化、萌化或换成另一只动物。宠物在画面中最多占四分之一，是一个清晰线条、写实插画质感的小身影，自然融入场景，不要像照片硬贴上去。整体是统一的明信片插画风格，柔和自然光，画面安全温馨美好。不要文字、水印、翅膀、光环。`
 
   try {
     const taskId = await imageGenImage(prompt, refCard)
