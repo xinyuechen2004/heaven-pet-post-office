@@ -233,7 +233,7 @@
         </div>
       </template>
 
-      <!-- 步骤 5: 三视角角色卡 -->
+      <!-- 步骤 5: 四视角角色卡 -->
       <template v-if="step === 5">
         <div class="space-y-6 animate-fade-in">
           <h2 class="text-[22px] font-medium text-deep-gray text-center">
@@ -297,8 +297,9 @@
               还想再调一下
             </button>
             <button
+              :disabled="!hasCompleteCharacterCards"
               class="px-6 py-2.5 bg-warm-orange text-white rounded-btn text-sm font-medium
-                     active:scale-95 transition-transform duration-200"
+                     active:scale-95 transition-transform duration-200 disabled:opacity-40"
               @click="step = 6"
             >
               这就是 TA
@@ -520,12 +521,13 @@ const hasFineTuneChanges = computed(() => {
   return Object.values(fineTuneState).some(v => v !== '') || fineTuneText.value.trim() !== ''
 })
 
-// 三视角
+// 四视角
 const generatingCards = ref(false)
 const cardError = ref('')
 const cardProgress = ref(0)
 const characterCards = ref<string[]>([])
 const cardLabels = ['微侧正坐', '侧面站着', '跑动玩耍', '向右趴着']
+const hasCompleteCharacterCards = computed(() => characterCards.value.length === 4 && characterCards.value.every(Boolean))
 // 调优模式（步骤5内）
 const tuneMode = ref<'select' | 'prompt' | 'generating' | null>(null)
 const selectedPerspectives = ref<number[]>([])
@@ -592,7 +594,7 @@ async function startGenerateAvatar() {
 async function generateAvatar() {
   try {
     const mainPhoto = photos.value[0].base64
-    const prompt = `将这张宠物照片转换成温暖柔和的卡通风格插画头像。风格要求：柔和手绘感、暖色调、简约但不幼稚、保留原宠物的关键外貌特征、圆润可爱的线条。背景为柔和的奶油色渐变。不要添加翅膀、光环或任何天使元素。`
+    const prompt = `把参考照片中的宠物生成一张半写实、温柔治愈的宠物纪念头像，不要幼稚卡通，不要拟人化，不要大眼萌化。必须保留真实宠物的品种、毛色、花纹位置、脸型、耳朵、眼睛颜色、鼻口颜色、体型年龄感和项圈等明显细节。画面像精致宠物写真插画，柔和自然光，细腻毛发质感，干净浅奶油色背景。不要翅膀、光环、天堂元素、文字、水印。`
     const taskId = await imageGenImage(prompt, mainPhoto)
     generatingText.value = '正在勾勒 TA 的轮廓...'
     const result = await pollImageGenImage(taskId)
@@ -624,7 +626,7 @@ async function handleFineTune() {
   tuning.value = true
   tuneError.value = ''
   try {
-    let prompt = '调整这张宠物卡通形象，'
+    let prompt = '在保持同一只宠物身份完全一致的前提下，调整这张半写实宠物头像，'
     if (fineTuneText.value.trim()) {
       prompt += fineTuneText.value.trim() + '。'
     }
@@ -636,7 +638,7 @@ async function handleFineTune() {
       }
     }
     if (changes.length) prompt += changes.join('，') + '。'
-    prompt += '保持温暖柔和的卡通风格，暖色调。'
+    prompt += '保持半写实宠物写真插画风格，不要幼稚卡通，不要拟人化；必须保留原有毛色、花纹位置、眼睛颜色、脸型、体型年龄感和项圈等身份特征。'
 
     const taskId = await imageGenImage(prompt, avatarResult.value!)
     const result = await pollImageGenImage(taskId)
@@ -654,15 +656,16 @@ async function generateCharacterCards() {
   generatingCards.value = true
   cardError.value = ''
   cardProgress.value = 0
+  characterCards.value = []
   try {
-    const refImage = photos.value[0]?.base64 || avatarResult.value!
-    const basePrompt = `基于参考图生成这只宠物的卡通全身形象，完整展示从头到尾巴的整只动物，严格保持参考图中动物的种类和外貌特征一致，温暖柔和的手绘卡通风格，暖色调，透明背景`
+    const refImage = avatarResult.value || photos.value[0]?.base64
+    const basePrompt = `基于参考图生成同一只宠物的半写实全身角色图。硬性要求：必须是同一只宠物，不能改变品种、毛色、花纹位置、眼睛颜色、鼻口颜色、脸型、耳朵形状、体型年龄感和项圈；不要幼稚卡通，不要拟人化，不要把幼猫画成成年猫或换成另一只猫。完整展示从头到尾巴的整只动物，真实比例，细腻毛发，温柔自然光。纯白或透明背景，不能有黄色笔触、色块、地面阴影、装饰背景、文字、水印`
 
     const views = [
-      `${basePrompt}，微微侧身坐着，身体稍微转向一侧，能看到侧脸和身体侧面，不是正面的也不是完全侧面的，全身完整包括尾巴`,
-      `${basePrompt}，侧面站着，从侧面看全身站立姿势，完整展示身体和尾巴`,
-      `${basePrompt}，典型动态姿势，在欢快地奔跑或跳跃，动作舒展自然充满活力，全身完整展现`,
-      `${basePrompt}，身体朝右侧趴着，头在右边，全身舒展趴在地上，前爪向前自然伸展，后腿自然弯曲，尾巴完整可见`,
+      `${basePrompt}。视角1：三分之二侧身坐姿，表情自然安静，全身完整，尾巴完整可见`,
+      `${basePrompt}。视角2：标准侧面站姿，从左向右看，四肢自然站立，全身完整，尾巴完整可见`,
+      `${basePrompt}。视角3：轻快小跑或跳跃姿势，动作自然但不要夸张，表情真实，全身完整`,
+      `${basePrompt}。视角4：侧身趴卧姿势，头微微抬起，前爪自然伸展，后腿自然弯曲，尾巴完整可见`,
     ]
 
     const results: (string | null)[] = [null, null, null, null]
@@ -684,20 +687,13 @@ async function generateCharacterCards() {
       })
     }
 
-    const filtered = results.filter(Boolean) as string[]
-    if (filtered.length === 0) {
-      cardError.value = 'AI 视角图暂时没有生成成功，已先使用头像继续完成建档。'
-      const fallback = avatarResult.value || photos.value[0]?.base64
-      characterCards.value = fallback ? [fallback, fallback, fallback, fallback] : []
-    } else {
-      // 补齐到 4 张：缺失的用已有图片填充
-      const filled: string[] = []
-      for (let i = 0; i < 4; i++) {
-        if (results[i]) filled.push(results[i]!)
-        else filled.push(filtered[i % filtered.length])
-      }
-      characterCards.value = filled
+    const generatedCards = results.filter(Boolean) as string[]
+    if (generatedCards.length !== 4) {
+      characterCards.value = []
+      cardError.value = `四视角需要完整生成 4 张，目前成功 ${generatedCards.length}/4。请重试，或先返回调整头像描述。`
+      return
     }
+    characterCards.value = generatedCards
   } catch (e: any) {
     cardError.value = e.message || '生成失败'
   } finally {
@@ -717,14 +713,14 @@ function togglePerspective(idx: number) {
 async function regenerateSelectedCards() {
   tuneMode.value = 'generating'
   tuneGenError.value = ''
-  const refImage = photos.value[0]?.base64 || avatarResult.value!
-  const basePrompt = `基于参考图生成这只宠物的卡通全身形象，完整展示从头到尾巴的整只动物，严格保持参考图中动物的种类和外貌特征一致，温暖柔和的手绘卡通风格，暖色调，透明背景`
+  const refImage = avatarResult.value || photos.value[0]?.base64
+  const basePrompt = `基于参考图生成同一只宠物的半写实全身角色图。硬性要求：必须是同一只宠物，不能改变品种、毛色、花纹位置、眼睛颜色、鼻口颜色、脸型、耳朵形状、体型年龄感和项圈；不要幼稚卡通，不要拟人化。完整展示从头到尾巴的整只动物，真实比例，细腻毛发。纯白或透明背景，不能有黄色笔触、色块、地面阴影、装饰背景、文字、水印`
 
   const viewPrompts = [
-    `${basePrompt}，微微侧身坐着，身体稍微转向一侧，能看到侧脸和身体侧面，不是正面的也不是完全侧面的，全身完整包括尾巴`,
-    `${basePrompt}，侧面站着，从侧面看全身站立姿势，完整展示身体和尾巴`,
-    `${basePrompt}，典型动态姿势，在欢快地奔跑或跳跃，动作舒展自然充满活力，全身完整展现`,
-    `${basePrompt}，身体朝右侧趴着，头在右边，全身舒展趴在地上，前爪向前自然伸展，后腿自然弯曲，尾巴完整可见`,
+    `${basePrompt}。视角1：三分之二侧身坐姿，表情自然安静，全身完整，尾巴完整可见`,
+    `${basePrompt}。视角2：标准侧面站姿，从左向右看，四肢自然站立，全身完整，尾巴完整可见`,
+    `${basePrompt}。视角3：轻快小跑或跳跃姿势，动作自然但不要夸张，表情真实，全身完整`,
+    `${basePrompt}。视角4：侧身趴卧姿势，头微微抬起，前爪自然伸展，后腿自然弯曲，尾巴完整可见`,
   ]
 
   try {
@@ -771,7 +767,7 @@ async function generatePostcardScene(postcardId: string, charCards: string[]): P
   const sceneDesc = SCENE_PROMPTS[postcard.illustration] || '在温暖梦幻的自然场景中'
   const bestIdx = getBestPerspectiveForScene(postcard.illustration)
   const refCard = charCards[bestIdx] || charCards[0]
-  const prompt = `将参考图中的宠物完整地放在以下场景中：${sceneDesc}。保留参考图中宠物的所有特征（毛色、体型、姿势、细节），宠物在画面中最多占四分之一，是画面中一个精致小巧的身影，自然融入场景之中。场景环绕包裹在它周围，整体温暖明亮的插画风格，柔和色调，画面安全温馨美好`
+  const prompt = `将参考图中的同一只宠物完整地放在以下场景中：${sceneDesc}。必须保留宠物身份特征：品种、毛色、花纹位置、眼睛颜色、脸型、耳朵、体型年龄感和项圈，不能换成另一只动物。宠物在画面中最多占四分之一，是一个真实、精致、温柔的小身影，自然融入场景。整体半写实治愈插画风格，柔和自然光，画面安全温馨美好。不要文字、水印、翅膀、光环。`
 
   try {
     const taskId = await imageGenImage(prompt, refCard)
@@ -783,6 +779,12 @@ async function generatePostcardScene(postcardId: string, charCards: string[]): P
 }
 
 async function handleComplete() {
+  if (!hasCompleteCharacterCards.value) {
+    step.value = 5
+    cardError.value = '需要先完整生成 4 张视角图，才能完成建档。'
+    return
+  }
+
   preparingPostcard.value = true
   prepareError.value = ''
   try {
