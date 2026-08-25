@@ -293,22 +293,33 @@
           </div>
 
           <!-- 四视角网格 -->
-          <div v-else class="grid grid-cols-2 gap-3">
-            <div
-              v-for="(label, idx) in cardLabels" :key="idx"
-              class="aspect-square rounded-xl overflow-hidden relative"
-              :class="characterCards[idx] ? 'bg-linen/30' : 'bg-linen'"
-            >
-              <img
-                v-if="characterCards[idx]"
-                :src="characterCards[idx]"
-                class="w-full h-full object-cover"
-                alt=""
-              />
-              <div v-else class="w-full h-full flex items-center justify-center text-xs text-soft-gray">
-                {{ label }}
+          <div v-else class="space-y-4">
+            <div class="grid grid-cols-2 gap-3">
+              <div
+                v-for="(label, idx) in cardLabels" :key="idx"
+                class="aspect-square rounded-xl overflow-hidden relative"
+                :class="characterCards[idx] ? 'bg-linen/30' : 'bg-linen'"
+              >
+                <img
+                  v-if="characterCards[idx]"
+                  :src="characterCards[idx]"
+                  class="w-full h-full object-cover"
+                  alt=""
+                />
+                <div v-else class="w-full h-full flex items-center justify-center text-xs text-soft-gray">
+                  {{ label }}
+                </div>
               </div>
             </div>
+            <p v-if="cardError" class="text-sm text-dusty-rose text-center leading-relaxed">{{ cardError }}</p>
+            <button
+              v-if="cardError"
+              class="px-6 py-2 bg-warm-orange text-white rounded-btn text-sm mx-auto block
+                     active:scale-95 transition-transform duration-200"
+              @click="generateCharacterCards"
+            >
+              重新生成四视角
+            </button>
           </div>
 
           <p v-if="!generatingCards && !tuneMode" class="text-xs text-faint-gray text-center">内容由 AI 生成</p>
@@ -686,7 +697,6 @@ async function generateCharacterCards() {
   characterCards.value = []
   try {
     const refImage = photos.value[0]?.base64 || avatarResult.value
-    const avatarRef = avatarResult.value ? [avatarResult.value] : []
     const basePrompt = `用参考照片的真实宠物特征生成同一只宠物的全身写实线条插画。若有第二张参考图，只参考其线条画风，不改变第一张照片里的身份特征。必须保持眼睛大小、眼距、脸型、耳朵角度、鼻口位置、胖瘦、年龄感、银灰虎斑毛色、花纹位置、项圈。清晰线条，自然毛发纹理，完整头到尾。纯白或透明背景。禁止美化、萌化、大眼、圆脸、幼态、Q版、3D、拟人、黄色笔触、色块、地面阴影、文字、水印。`
 
     const views = [
@@ -702,7 +712,11 @@ async function generateCharacterCards() {
     for (let batch = 0; batch < views.length; batch += 2) {
       const batchPrompts = views.slice(batch, batch + 2)
       // 用 allSettled 避免单张失败导致整批失败
-      const taskIdResults = await Promise.allSettled(batchPrompts.map(p => imageGenImage(p, refImage, avatarRef)))
+      const taskIdResults = await Promise.allSettled(batchPrompts.map(p => imageGenImage(p, refImage)))
+      const firstRejected = taskIdResults.find(r => r.status === 'rejected') as PromiseRejectedResult | undefined
+      if (firstRejected) {
+        throw new Error(firstRejected.reason?.message || '四视角生成请求失败')
+      }
       const pollTasks = taskIdResults.map(r =>
         r.status === 'fulfilled' ? pollImageGenImage(r.value).catch(() => null) : Promise.resolve(null)
       )
@@ -742,7 +756,6 @@ async function regenerateSelectedCards() {
   tuneMode.value = 'generating'
   tuneGenError.value = ''
   const refImage = photos.value[0]?.base64 || avatarResult.value
-  const avatarRef = avatarResult.value ? [avatarResult.value] : []
   const basePrompt = `用参考照片的真实宠物特征生成同一只宠物的全身写实线条插画。若有第二张参考图，只参考其线条画风，不改变第一张照片里的身份特征。必须保持眼睛大小、眼距、脸型、耳朵角度、鼻口位置、胖瘦、年龄感、银灰虎斑毛色、花纹位置、项圈。清晰线条，自然毛发纹理，完整头到尾。纯白或透明背景。禁止美化、萌化、大眼、圆脸、幼态、Q版、3D、拟人、黄色笔触、色块、地面阴影、文字、水印。`
 
   const viewPrompts = [
@@ -756,7 +769,7 @@ async function regenerateSelectedCards() {
     for (const i of selectedPerspectives.value) {
       try {
         const prompt = `${viewPrompts[i]}。${tunePrompt.value.trim()}`
-        const taskId = await imageGenImage(prompt, characterCards.value[i] || refImage, avatarRef)
+        const taskId = await imageGenImage(prompt, characterCards.value[i] || refImage)
         const result = await pollImageGenImage(taskId)
         characterCards.value[i] = result
       } catch {
