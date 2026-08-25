@@ -151,6 +151,32 @@
               </button>
             </div>
           </div>
+
+          <!-- 生成失败 -->
+          <div v-else class="py-12 space-y-6">
+            <div class="w-20 h-20 mx-auto rounded-full bg-peach-tint flex items-center justify-center">
+              <span class="text-2xl">!</span>
+            </div>
+            <p class="text-sm text-dusty-rose leading-relaxed">
+              {{ genError || 'AI 画像没有生成成功，请重试。' }}
+            </p>
+            <div class="flex gap-4 justify-center pt-2">
+              <button
+                class="px-6 py-2.5 text-sm text-deep-gray border border-[rgba(51,51,51,0.12)] rounded-btn
+                       active:scale-95 transition-transform duration-200"
+                @click="step = 2"
+              >
+                重新上传
+              </button>
+              <button
+                class="px-6 py-2.5 bg-warm-orange text-white rounded-btn text-sm font-medium
+                       active:scale-95 transition-transform duration-200"
+                @click="retryGenerate"
+              >
+                重新生成
+              </button>
+            </div>
+          </div>
         </div>
       </template>
 
@@ -601,10 +627,11 @@ async function generateAvatar() {
     avatarResult.value = result
     initialAvatar.value = result // 保存第一版头像
   } catch (e: any) {
-    const mainPhoto = photos.value[0]?.base64 || photos.value[0]?.preview
-    avatarResult.value = mainPhoto
-    initialAvatar.value = mainPhoto
-    genError.value = 'AI 画像暂时没有生成成功，已先使用你上传的照片继续建档。你也可以返回重试。'
+    avatarResult.value = null
+    initialAvatar.value = null
+    genError.value = e?.message
+      ? `AI 画像没有生成成功：${e.message}`
+      : 'AI 画像没有生成成功，请重试。'
   } finally {
     generating.value = false
   }
