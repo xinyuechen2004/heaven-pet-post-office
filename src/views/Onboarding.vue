@@ -616,6 +616,79 @@ function splitImageGrid(dataUrl: string, rows = 2, cols = 2): Promise<string[]> 
   })
 }
 
+function cropDarkFrame(dataUrl: string): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.onload = () => {
+      const sourceCanvas = document.createElement('canvas')
+      sourceCanvas.width = img.width
+      sourceCanvas.height = img.height
+      const sourceCtx = sourceCanvas.getContext('2d')
+      if (!sourceCtx) {
+        resolve(dataUrl)
+        return
+      }
+      sourceCtx.drawImage(img, 0, 0)
+      const pixels = sourceCtx.getImageData(0, 0, img.width, img.height).data
+
+      const isDarkColumn = (x: number) => {
+        let dark = 0
+        for (let y = 0; y < img.height; y++) {
+          const i = (y * img.width + x) * 4
+          const brightness = (pixels[i] + pixels[i + 1] + pixels[i + 2]) / 3
+          if (brightness < 34) dark++
+        }
+        return dark / img.height > 0.82
+      }
+
+      const isDarkRow = (y: number) => {
+        let dark = 0
+        for (let x = 0; x < img.width; x++) {
+          const i = (y * img.width + x) * 4
+          const brightness = (pixels[i] + pixels[i + 1] + pixels[i + 2]) / 3
+          if (brightness < 34) dark++
+        }
+        return dark / img.width > 0.82
+      }
+
+      let left = 0
+      let right = img.width - 1
+      let top = 0
+      let bottom = img.height - 1
+      while (left < right && isDarkColumn(left)) left++
+      while (right > left && isDarkColumn(right)) right--
+      while (top < bottom && isDarkRow(top)) top++
+      while (bottom > top && isDarkRow(bottom)) bottom--
+
+      left = Math.max(0, left - 2)
+      top = Math.max(0, top - 2)
+      right = Math.min(img.width - 1, right + 2)
+      bottom = Math.min(img.height - 1, bottom + 2)
+
+      const croppedWidth = right - left + 1
+      const croppedHeight = bottom - top + 1
+      const changedEnough = croppedWidth < img.width - 12 || croppedHeight < img.height - 12
+      if (!changedEnough || croppedWidth < img.width * 0.35 || croppedHeight < img.height * 0.35) {
+        resolve(dataUrl)
+        return
+      }
+
+      const canvas = document.createElement('canvas')
+      canvas.width = croppedWidth
+      canvas.height = croppedHeight
+      const ctx = canvas.getContext('2d')
+      if (!ctx) {
+        resolve(dataUrl)
+        return
+      }
+      ctx.drawImage(img, left, top, croppedWidth, croppedHeight, 0, 0, croppedWidth, croppedHeight)
+      resolve(canvas.toDataURL('image/jpeg', 0.94))
+    }
+    img.onerror = () => resolve(dataUrl)
+    img.src = dataUrl
+  })
+}
+
 // 宠物信息
 const customTag = ref('')
 const presetTags = ['温柔', '贪吃', '调皮', '粘人', '安静', '勇敢', '好奇', '聪明', '慵懒']
@@ -738,10 +811,12 @@ async function generateCharacterCards() {
   cardProgress.value = 0
   characterCards.value = []
   try {
-    const refImage = photos.value[0]?.base64 || avatarResult.value
-    const prompt = `根据参考照片生成一张 2x2 四宫格宠物角色设定图，四格必须是同一只宠物、同一画师、同一线条、同一上色、同一头身比例、同一年龄感。风格：彩色写实插画，线条清晰但必须完整全彩上色，自然毛发纹理，可用于后续明信片场景。严格保留原图真实特征：眼睛大小和眼距、脸型、耳朵角度、鼻口比例、胖瘦身材、真实毛色、花纹位置、项圈。四格顺序：左上微侧正坐，右上侧面站着，左下自然小跑，右下侧身趴着。每格宠物完整头到尾，比例一致，纯白背景，无文字无标签无边框。禁止黑白线稿、素描、铅笔稿、填色书效果、美化、萌化、大眼、圆脸、幼态、Q版、3D、贴纸白边、外描边、黄色笔触、地面大阴影、水印。`
+    const styleRef = avatarResult.value || photos.value[0]?.base64
+    const photoRef = photos.value[0]?.base64
+    const extraRefs = photoRef && photoRef !== styleRef ? [photoRef] : []
+    const prompt = `参考图1是已经确认的宠物头像和画风，必须以参考图1为主，延续它的线条粗细、上色方式、毛发质感、脸部特征和项圈；参考图2如有，只用于校准真实身份特征。生成一张 2x2 四宫格宠物角色设定图，四格必须是同一只宠物、同一画师、同一线条、同一上色、同一头身比例、同一年龄感。风格：彩色写实插画，线条清晰但必须完整全彩上色，可用于后续明信片场景。严格保留真实特征：眼睛大小和眼距、脸型、耳朵角度、鼻口比例、胖瘦身材、真实毛色、花纹位置、项圈。四格顺序：左上微侧正坐，右上侧面站着，左下自然小跑，右下侧身趴着。每格只出现宠物本体和项圈，完整头到尾，比例一致，纯白背景。禁止白色描边、贴纸边、外轮廓光边、毯子、垫子、地面、椭圆阴影、装饰物、道具、背景、文字、标签、边框、黑白线稿、素描、铅笔稿、填色书效果、美化、萌化、大眼、圆脸、幼态、Q版、3D、水印。`
 
-    const taskId = await imageGenImage(prompt, refImage)
+    const taskId = await imageGenImage(prompt, styleRef!, extraRefs)
     const sheet = await pollImageGenImage(taskId)
     const generatedCards = await splitImageGrid(sheet, 2, 2)
     cardProgress.value = generatedCards.length
@@ -770,13 +845,15 @@ function togglePerspective(idx: number) {
 async function regenerateSelectedCards() {
   tuneMode.value = 'generating'
   tuneGenError.value = ''
-  const refImage = photos.value[0]?.base64 || avatarResult.value
+  const styleRef = avatarResult.value || photos.value[0]?.base64
+  const photoRef = photos.value[0]?.base64
+  const extraRefs = photoRef && photoRef !== styleRef ? [photoRef] : []
 
   try {
     cardProgress.value = 0
     characterCards.value = []
-    const prompt = `根据参考照片重新生成一张 2x2 四宫格宠物角色设定图，并应用这个修改要求：${tunePrompt.value.trim()}。四格必须是同一只宠物、同一画师、同一线条、同一上色、同一头身比例、同一年龄感。风格：彩色写实插画，线条清晰但必须完整全彩上色，自然毛发纹理。严格保留原图真实特征：眼睛大小和眼距、脸型、耳朵角度、鼻口比例、胖瘦身材、真实毛色、花纹位置、项圈。四格顺序：左上微侧正坐，右上侧面站着，左下自然小跑，右下侧身趴着。每格宠物完整头到尾，比例一致，纯白背景，无文字无标签无边框。禁止黑白线稿、素描、铅笔稿、填色书效果、美化、萌化、大眼、圆脸、幼态、Q版、3D、贴纸白边、外描边、黄色笔触、地面大阴影、水印。`
-    const taskId = await imageGenImage(prompt, refImage)
+    const prompt = `参考图1是已经确认的宠物头像和画风，必须以参考图1为主，延续它的线条粗细、上色方式、毛发质感、脸部特征和项圈；参考图2如有，只用于校准真实身份特征。重新生成一张 2x2 四宫格宠物角色设定图，并应用这个修改要求：${tunePrompt.value.trim()}。四格必须是同一只宠物、同一画师、同一线条、同一上色、同一头身比例、同一年龄感。风格：彩色写实插画，线条清晰但必须完整全彩上色。严格保留真实特征：眼睛大小和眼距、脸型、耳朵角度、鼻口比例、胖瘦身材、真实毛色、花纹位置、项圈。四格顺序：左上微侧正坐，右上侧面站着，左下自然小跑，右下侧身趴着。每格只出现宠物本体和项圈，完整头到尾，比例一致，纯白背景。禁止白色描边、贴纸边、外轮廓光边、毯子、垫子、地面、椭圆阴影、装饰物、道具、背景、文字、标签、边框、黑白线稿、素描、铅笔稿、填色书效果、美化、萌化、大眼、圆脸、幼态、Q版、3D、水印。`
+    const taskId = await imageGenImage(prompt, styleRef!, extraRefs)
     const sheet = await pollImageGenImage(taskId)
     characterCards.value = await splitImageGrid(sheet, 2, 2)
     cardProgress.value = characterCards.value.length
@@ -814,12 +891,12 @@ async function generatePostcardScene(postcardId: string, charCards: string[]): P
   const sceneDesc = SCENE_PROMPTS[postcard.illustration] || '在温暖梦幻的自然场景中'
   const bestIdx = getBestPerspectiveForScene(postcard.illustration)
   const refCard = charCards[bestIdx] || charCards[0]
-  const prompt = `生成一张完整横向 4:3 明信片正面插画，画面必须铺满整个画布：${sceneDesc}。将参考图中的同一只宠物自然放进场景里，宠物面积小于画面四分之一。必须保留宠物身份特征：眼睛大小、眼距、脸型、头身比例、胖瘦、年龄感、毛色、花纹位置、眼睛颜色、耳朵和项圈，不能美化、萌化或换成另一只动物。整体是统一的彩色写实插画风格，线条清晰但完整全彩上色，柔和自然光，安全温馨。禁止把插画放进黑色/深色卡片、相框、圆角容器或留白画布里；不要黑底、外框、边框、文字、水印、翅膀、光环、黑白线稿。`
+  const prompt = `生成一张完整横向 4:3 明信片正面插画，画面必须铺满整个画布：${sceneDesc}。必须直接生成横向场景，不要生成竖图后放进横向黑底里。将参考图中的同一只宠物自然放进场景里，宠物面积小于画面四分之一。必须保留宠物身份特征：眼睛大小、眼距、脸型、头身比例、胖瘦、年龄感、毛色、花纹位置、眼睛颜色、耳朵和项圈，不能美化、萌化或换成另一只动物。整体是统一的彩色写实插画风格，线条清晰但完整全彩上色，柔和自然光，安全温馨。禁止把插画放进黑色/深色卡片、相框、圆角容器或留白画布里；不要黑底、外框、边框、文字、水印、翅膀、光环、黑白线稿。`
 
   try {
     const taskId = await imageGenImage(prompt, refCard)
     const result = await pollImageGenImage(taskId)
-    return result
+    return cropDarkFrame(result)
   } catch {
     return null
   }
