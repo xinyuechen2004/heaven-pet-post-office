@@ -708,25 +708,12 @@ async function generateCharacterCards() {
 
     const results: (string | null)[] = [null, null, null, null]
 
-    // 并发限制为 2 个，单张失败不影响其他
-    for (let batch = 0; batch < views.length; batch += 2) {
-      const batchPrompts = views.slice(batch, batch + 2)
-      // 用 allSettled 避免单张失败导致整批失败
-      const taskIdResults = await Promise.allSettled(batchPrompts.map(p => imageGenImage(p, refImage)))
-      const firstRejected = taskIdResults.find(r => r.status === 'rejected') as PromiseRejectedResult | undefined
-      if (firstRejected) {
-        throw new Error(firstRejected.reason?.message || '四视角生成请求失败')
-      }
-      const pollTasks = taskIdResults.map(r =>
-        r.status === 'fulfilled' ? pollImageGenImage(r.value).catch(() => null) : Promise.resolve(null)
-      )
-      const settled = await Promise.allSettled(pollTasks)
-      settled.forEach((r, j) => {
-        if (r.status === 'fulfilled' && r.value) {
-          results[batch + j] = r.value
-        }
-        cardProgress.value++
-      })
+    // 顺序生成更慢，但更稳定：避免并发触发模型限流或前端超时。
+    for (let i = 0; i < views.length; i++) {
+      const taskId = await imageGenImage(views[i], refImage)
+      const result = await pollImageGenImage(taskId)
+      results[i] = result
+      cardProgress.value++
     }
 
     const generatedCards = results.filter(Boolean) as string[]
