@@ -620,7 +620,7 @@ async function startGenerateAvatar() {
 async function generateAvatar() {
   try {
     const mainPhoto = photos.value[0].base64
-    const prompt = `把参考照片中的宠物做成写实线条插画头像，像专业宠物肖像师按照片临摹，不做重新设计。必须严格保留原照片的真实比例：眼睛大小、眼距、瞳孔形状、脸型宽窄、鼻子大小、嘴巴位置、耳朵大小和角度、头身比例、胖瘦、年龄感、毛色、虎斑花纹位置、眼睛颜色、鼻口颜色和项圈细节。不要美化，不要萌化，不要把眼睛画大，不要把脸画圆，不要幼态化，不要改成可爱头像。风格要求：清晰线条、写实插画、自然毛发纹理、真实五官比例、干净浅色背景。不要照片级真实、不要3D、不要Q版、不要拟人化、不要夸张表情、不要翅膀、光环、天堂元素、文字、水印。`
+    const prompt = `忠实临摹参考照片里的宠物，生成清晰线条的写实插画头像。保持原图真实比例：眼睛大小、眼距、脸型、耳朵角度、鼻口位置、胖瘦、年龄感、银灰虎斑毛色、花纹位置、项圈。画面干净浅色背景，自然毛发纹理。禁止美化、萌化、大眼、圆脸、幼态、Q版、3D、拟人、夸张表情、文字、水印。`
     const taskId = await imageGenImage(prompt, mainPhoto)
     generatingText.value = '正在勾勒 TA 的轮廓...'
     const result = await pollImageGenImage(taskId)
@@ -665,7 +665,7 @@ async function handleFineTune() {
       }
     }
     if (changes.length) prompt += changes.join('，') + '。'
-    prompt += '保持按照片临摹的写实线条插画风格，不重新设计、不美化、不萌化；必须保留原有五官比例、眼睛大小、眼距、脸型宽窄、头身比例、胖瘦、年龄感、毛色、花纹位置、眼睛颜色和项圈等身份特征。'
+    prompt += '保持清晰线条的写实插画风格，只按参考图修正。保留眼睛大小、眼距、脸型、耳朵角度、鼻口位置、胖瘦、年龄感、毛色、花纹位置和项圈。禁止美化、萌化、大眼、圆脸、幼态、Q版。'
 
     const taskId = await imageGenImage(prompt, avatarResult.value!)
     const result = await pollImageGenImage(taskId)
@@ -685,8 +685,9 @@ async function generateCharacterCards() {
   cardProgress.value = 0
   characterCards.value = []
   try {
-    const refImage = avatarResult.value || photos.value[0]?.base64
-    const basePrompt = `基于参考图生成同一只宠物的写实线条全身角色图，像专业宠物肖像师按参考图临摹。硬性要求：必须是同一只宠物，不能重新设计、不美化、不萌化；必须保持参考图的真实比例：眼睛大小、眼距、瞳孔形状、脸型宽窄、鼻子大小、嘴巴位置、耳朵大小和角度、头身比例、胖瘦、年龄感、毛色、虎斑花纹位置、眼睛颜色、鼻口颜色和项圈。眼睛绝对不能放大，脸不能变圆，身体不能变幼，不要换成另一只猫。风格要求：清晰线条、写实插画、自然毛发纹理、真实五官和身体比例。完整展示从头到尾巴的整只动物。纯白或透明背景，不能有黄色笔触、色块、地面阴影、装饰背景、文字、水印`
+    const refImage = photos.value[0]?.base64 || avatarResult.value
+    const avatarRef = avatarResult.value ? [avatarResult.value] : []
+    const basePrompt = `用参考照片的真实宠物特征生成同一只宠物的全身写实线条插画。若有第二张参考图，只参考其线条画风，不改变第一张照片里的身份特征。必须保持眼睛大小、眼距、脸型、耳朵角度、鼻口位置、胖瘦、年龄感、银灰虎斑毛色、花纹位置、项圈。清晰线条，自然毛发纹理，完整头到尾。纯白或透明背景。禁止美化、萌化、大眼、圆脸、幼态、Q版、3D、拟人、黄色笔触、色块、地面阴影、文字、水印。`
 
     const views = [
       `${basePrompt}。视角1：三分之二侧身坐姿，表情自然安静，全身完整，尾巴完整可见`,
@@ -701,7 +702,7 @@ async function generateCharacterCards() {
     for (let batch = 0; batch < views.length; batch += 2) {
       const batchPrompts = views.slice(batch, batch + 2)
       // 用 allSettled 避免单张失败导致整批失败
-      const taskIdResults = await Promise.allSettled(batchPrompts.map(p => imageGenImage(p, refImage)))
+      const taskIdResults = await Promise.allSettled(batchPrompts.map(p => imageGenImage(p, refImage, avatarRef)))
       const pollTasks = taskIdResults.map(r =>
         r.status === 'fulfilled' ? pollImageGenImage(r.value).catch(() => null) : Promise.resolve(null)
       )
@@ -740,8 +741,9 @@ function togglePerspective(idx: number) {
 async function regenerateSelectedCards() {
   tuneMode.value = 'generating'
   tuneGenError.value = ''
-  const refImage = avatarResult.value || photos.value[0]?.base64
-  const basePrompt = `基于参考图生成同一只宠物的写实线条全身角色图，像专业宠物肖像师按参考图临摹。硬性要求：必须是同一只宠物，不能重新设计、不美化、不萌化；必须保持参考图的真实比例：眼睛大小、眼距、瞳孔形状、脸型宽窄、鼻子大小、嘴巴位置、耳朵大小和角度、头身比例、胖瘦、年龄感、毛色、虎斑花纹位置、眼睛颜色、鼻口颜色和项圈。眼睛绝对不能放大，脸不能变圆，身体不能变幼。风格要求：清晰线条、写实插画、自然毛发纹理、真实五官和身体比例。完整展示从头到尾巴的整只动物。纯白或透明背景，不能有黄色笔触、色块、地面阴影、装饰背景、文字、水印`
+  const refImage = photos.value[0]?.base64 || avatarResult.value
+  const avatarRef = avatarResult.value ? [avatarResult.value] : []
+  const basePrompt = `用参考照片的真实宠物特征生成同一只宠物的全身写实线条插画。若有第二张参考图，只参考其线条画风，不改变第一张照片里的身份特征。必须保持眼睛大小、眼距、脸型、耳朵角度、鼻口位置、胖瘦、年龄感、银灰虎斑毛色、花纹位置、项圈。清晰线条，自然毛发纹理，完整头到尾。纯白或透明背景。禁止美化、萌化、大眼、圆脸、幼态、Q版、3D、拟人、黄色笔触、色块、地面阴影、文字、水印。`
 
   const viewPrompts = [
     `${basePrompt}。视角1：三分之二侧身坐姿，表情自然安静，全身完整，尾巴完整可见`,
@@ -754,7 +756,7 @@ async function regenerateSelectedCards() {
     for (const i of selectedPerspectives.value) {
       try {
         const prompt = `${viewPrompts[i]}。${tunePrompt.value.trim()}`
-        const taskId = await imageGenImage(prompt, characterCards.value[i] || refImage)
+        const taskId = await imageGenImage(prompt, characterCards.value[i] || refImage, avatarRef)
         const result = await pollImageGenImage(taskId)
         characterCards.value[i] = result
       } catch {

@@ -10,8 +10,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { prompt, imageBase64 } = req.body || {}
-    const result = await editImage(prompt, imageBase64)
+    const { prompt, imageBase64, imageBase64List } = req.body || {}
+    const result = await editImage(prompt, imageBase64, imageBase64List)
     res.status(200).json(result)
   } catch (error) {
     console.error('[api/image/edit]', error)

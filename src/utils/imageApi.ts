@@ -4,11 +4,15 @@ function timeoutSignal(ms: number): AbortSignal {
   return controller.signal
 }
 
-export async function generateImageFromReference(prompt: string, imageBase64: string): Promise<string> {
+export async function generateImageFromReference(
+  prompt: string,
+  imageBase64: string,
+  extraImages: string[] = []
+): Promise<string> {
   const res = await fetch('/api/image/edit', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt, imageBase64 }),
+    body: JSON.stringify({ prompt, imageBase64, imageBase64List: extraImages }),
     signal: timeoutSignal(55_000),
   })
 
@@ -39,8 +43,8 @@ export async function generateImage(prompt: string): Promise<string> {
 // Backward-compatible wrappers for the original Tusi async task API.
 // The old code expects: taskId = imageGenImage(...); result = pollImageGenImage(taskId).
 // Here the "taskId" is already the final data URL, because our own API returns synchronously.
-export async function imageGenImage(prompt: string, imageBase64: string): Promise<string> {
-  return generateImageFromReference(prompt, imageBase64)
+export async function imageGenImage(prompt: string, imageBase64: string, extraImages: string[] = []): Promise<string> {
+  return generateImageFromReference(prompt, imageBase64, extraImages)
 }
 
 export async function pollImageGenImage(taskIdOrDataUrl: string): Promise<string> {

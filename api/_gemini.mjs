@@ -146,15 +146,21 @@ async function fetchSiliconFlowImage(payload) {
   return `data:${safeContentType};base64,${buffer.toString('base64')}`
 }
 
-async function editImageWithSiliconFlow(prompt, imageBase64) {
+async function editImageWithSiliconFlow(prompt, imageBase64, imageBase64List = []) {
+  const extraImages = Array.isArray(imageBase64List) ? imageBase64List.filter(Boolean).slice(0, 2) : []
+  const payload = {
+    model: imageModel,
+    prompt,
+    image: normalizeImageDataUrlForSiliconFlow(imageBase64),
+    num_inference_steps: 20,
+    guidance_scale: 4,
+  }
+  extraImages.forEach((image, index) => {
+    payload[`image${index + 2}`] = normalizeImageDataUrlForSiliconFlow(image)
+  })
+
   return {
-    image: await fetchSiliconFlowImage({
-      model: imageModel,
-      prompt,
-      image: normalizeImageDataUrlForSiliconFlow(imageBase64),
-      num_inference_steps: 20,
-      guidance_scale: 4,
-    }),
+    image: await fetchSiliconFlowImage(payload),
     provider: 'siliconflow',
   }
 }
@@ -191,11 +197,11 @@ export async function generateText(prompt) {
   return { text: response.text || '' }
 }
 
-export async function editImage(prompt, imageBase64) {
+export async function editImage(prompt, imageBase64, imageBase64List = []) {
   if (!prompt || !imageBase64) throw new Error('缺少 prompt 或图片')
 
   if (siliconFlowApiKey) {
-    return editImageWithSiliconFlow(prompt, imageBase64)
+    return editImageWithSiliconFlow(prompt, imageBase64, imageBase64List)
   }
 
   if (!client) {
