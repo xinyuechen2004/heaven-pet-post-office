@@ -47,6 +47,13 @@ const router = createRouter({
 
 // 如果未建档，重定向到建档页
 router.beforeEach((to) => {
+  const resetForTesting = new URLSearchParams(window.location.search).get('reset') === '1'
+  if (resetForTesting) {
+    localStorage.removeItem('heaven-diary')
+    window.location.replace(`${window.location.origin}${window.location.pathname}#/onboarding`)
+    return false
+  }
+
   const isPublicPage = to.name === 'landing' || to.name === 'onboarding'
   if (isPublicPage) return
 
