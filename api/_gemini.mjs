@@ -58,6 +58,34 @@ function bufferToBase64(buffer) {
   return Buffer.isBuffer(buffer) ? buffer.toString('base64') : Buffer.from(buffer).toString('base64')
 }
 
+function detectImageMime(buffer, fallback = 'image/png') {
+  if (!buffer || buffer.length < 12) return fallback
+  if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) {
+    return 'image/png'
+  }
+  if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+    return 'image/jpeg'
+  }
+  if (buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46) {
+    return 'image/gif'
+  }
+  if (
+    buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46 &&
+    buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50
+  ) {
+    return 'image/webp'
+  }
+  return fallback
+}
+
+function normalizeImageDataUrlForSiliconFlow(imageBase64) {
+  const { buffer, mime } = normalizeBase64Image(imageBase64)
+  const safeMime = mime.startsWith('image/') && mime !== 'image/octet-stream'
+    ? mime
+    : detectImageMime(buffer)
+  return `data:${safeMime};base64,${bufferToBase64(buffer)}`
+}
+
 function extractImageFromOutputs(outputs) {
   const imageOutput = outputs?.find((output) => output?.type === 'image' && output?.data)
   if (!imageOutput?.data) return null
@@ -111,7 +139,11 @@ async function fetchSiliconFlowImage(payload) {
 
   const contentType = imageResponse.headers.get('content-type') || 'image/png'
   const arrayBuffer = await imageResponse.arrayBuffer()
-  return `data:${contentType};base64,${Buffer.from(arrayBuffer).toString('base64')}`
+  const buffer = Buffer.from(arrayBuffer)
+  const safeContentType = contentType.startsWith('image/') && contentType !== 'image/octet-stream'
+    ? contentType
+    : detectImageMime(buffer)
+  return `data:${safeContentType};base64,${buffer.toString('base64')}`
 }
 
 async function editImageWithSiliconFlow(prompt, imageBase64) {
@@ -119,7 +151,7 @@ async function editImageWithSiliconFlow(prompt, imageBase64) {
     image: await fetchSiliconFlowImage({
       model: imageModel,
       prompt,
-      image: imageBase64,
+      image: normalizeImageDataUrlForSiliconFlow(imageBase64),
       num_inference_steps: 20,
       guidance_scale: 4,
     }),
