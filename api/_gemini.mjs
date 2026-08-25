@@ -6,6 +6,7 @@ const siliconFlowApiKey = process.env.SILICONFLOW_API_KEY
 const siliconFlowBaseUrl = process.env.SILICONFLOW_BASE_URL || 'https://api.siliconflow.cn/v1'
 
 export const textModel = process.env.GEMINI_TEXT_MODEL || 'gemini-2.5-flash'
+export const siliconFlowTextModel = process.env.SILICONFLOW_TEXT_MODEL || 'Qwen/Qwen3-8B'
 export const imageModel = process.env.SILICONFLOW_IMAGE_MODEL || 'Qwen/Qwen-Image-Edit-2509'
 export const textToImageModel = process.env.SILICONFLOW_TEXT_TO_IMAGE_MODEL || 'Kwai-Kolors/Kolors'
 export const imageProvider = siliconFlowApiKey ? 'siliconflow' : 'gemini-fallback'
@@ -179,22 +180,80 @@ async function generateImageWithSiliconFlow(prompt) {
   }
 }
 
+function fallbackPostcardText() {
+  return '我今天到了一个很安静的地方。这里的风很轻，路边有暖暖的光。我会慢慢旅行，也会偶尔给你寄信。你不用急着好起来，慢慢来就好。'
+}
+
+async function generateTextWithSiliconFlow(prompt) {
+  if (!siliconFlowApiKey) {
+    throw new Error('缺少 SILICONFLOW_API_KEY')
+  }
+
+  const response = await withTimeout(fetch(`${siliconFlowBaseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${siliconFlowApiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: siliconFlowTextModel,
+      messages: [
+        {
+          role: 'user',
+          content: prompt,
+        },
+      ],
+      temperature: 0.75,
+      max_tokens: 220,
+    }),
+  }), 25_000, '硅基流动文字生成超时，请稍后重试')
+
+  const data = await response.json().catch(() => null)
+  if (!response.ok) {
+    const message = data?.message || data?.error?.message || response.statusText
+    throw new Error(`硅基流动文字生成失败：${message}`)
+  }
+
+  const text = data?.choices?.[0]?.message?.content?.trim()
+  if (!text) {
+    throw new Error('硅基流动未返回文字')
+  }
+  return text
+}
+
 export async function generateText(prompt) {
   if (!prompt) throw new Error('缺少 prompt')
 
-  if (!client) {
-    return {
-      text: '我今天到了一个很温暖的地方。这里的风很轻，路边有小小的花。我会慢慢旅行，也会偶尔给你寄信。你不用急着好起来，慢慢来就好。',
-      fallback: true,
+  if (client) {
+    try {
+      const response = await withTimeout(client.models.generateContent({
+        model: textModel,
+        contents: prompt,
+      }), 25_000, 'Gemini 文字生成超时，请稍后重试')
+      const text = response.text?.trim() || ''
+      if (text) {
+        return { text, provider: 'gemini' }
+      }
+      throw new Error('Gemini 未返回文字')
+    } catch (error) {
+      console.error('[gemini text]', error)
     }
   }
 
-  const response = await client.models.generateContent({
-    model: textModel,
-    contents: prompt,
-  })
+  if (siliconFlowApiKey) {
+    try {
+      const text = await generateTextWithSiliconFlow(prompt)
+      return { text, provider: 'siliconflow' }
+    } catch (error) {
+      console.error('[siliconflow text]', error)
+    }
+  }
 
-  return { text: response.text || '' }
+  return {
+    text: fallbackPostcardText(),
+    provider: 'fallback',
+    fallback: true,
+  }
 }
 
 export async function editImage(prompt, imageBase64, imageBase64List = []) {

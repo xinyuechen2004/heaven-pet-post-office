@@ -393,7 +393,7 @@
           <!-- 调优模式：输入调整描述 -->
           <div v-if="tuneMode === 'prompt'" class="space-y-5">
             <p class="text-sm text-deep-gray text-center">
-              已选择 {{ selectedPerspectives.length }} 个视角，<br/>想怎么调整？
+              我会按你的描述重做一整套四视角，<br/>让四张图保持同一种风格。
             </p>
             <textarea
               v-model="tunePrompt"
@@ -403,6 +403,7 @@
               placeholder="比如：尾巴再长一点、耳朵更圆一些、整体的毛色偏浅..."
               rows="4"
             />
+            <p v-if="tuneGenError" class="text-sm text-dusty-rose text-center">{{ tuneGenError }}</p>
             <div class="flex gap-4 justify-center pt-2">
               <button
                 class="px-6 py-2.5 text-sm text-deep-gray border border-[rgba(51,51,51,0.12)] rounded-btn
@@ -417,7 +418,7 @@
                        active:scale-95 transition-transform duration-200 disabled:opacity-40"
                 @click="regenerateSelectedCards"
               >
-                开始生成
+                重做一整套
               </button>
             </div>
           </div>
@@ -574,6 +575,47 @@ const tuneGenError = ref('')
 const preparingPostcard = ref(false)
 const prepareError = ref('')
 
+function splitImageGrid(dataUrl: string, rows = 2, cols = 2): Promise<string[]> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => {
+      const cellWidth = Math.floor(img.width / cols)
+      const cellHeight = Math.floor(img.height / rows)
+      const cards: string[] = []
+
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          const canvas = document.createElement('canvas')
+          canvas.width = cellWidth
+          canvas.height = cellHeight
+          const ctx = canvas.getContext('2d')
+          if (!ctx) {
+            reject(new Error('浏览器无法切分四视角图片'))
+            return
+          }
+          ctx.fillStyle = '#ffffff'
+          ctx.fillRect(0, 0, cellWidth, cellHeight)
+          ctx.drawImage(
+            img,
+            col * cellWidth,
+            row * cellHeight,
+            cellWidth,
+            cellHeight,
+            0,
+            0,
+            cellWidth,
+            cellHeight,
+          )
+          cards.push(canvas.toDataURL('image/jpeg', 0.92))
+        }
+      }
+      resolve(cards)
+    }
+    img.onerror = () => reject(new Error('四视角图片读取失败'))
+    img.src = dataUrl
+  })
+}
+
 // 宠物信息
 const customTag = ref('')
 const presetTags = ['温柔', '贪吃', '调皮', '粘人', '安静', '勇敢', '好奇', '聪明', '慵懒']
@@ -631,7 +673,7 @@ async function startGenerateAvatar() {
 async function generateAvatar() {
   try {
     const mainPhoto = photos.value[0].base64
-    const prompt = `忠实临摹参考照片里的宠物，生成彩色写实宠物插画头像。保持原图真实比例：眼睛大小、眼距、脸型、耳朵角度、鼻口位置、胖瘦、年龄感、银灰虎斑毛色、花纹位置、项圈。画面干净浅色背景，自然毛发纹理，边缘清楚但必须保留完整颜色。禁止黑白线稿、素描、铅笔稿、填色书效果、美化、萌化、大眼、圆脸、幼态、Q版、3D、拟人、夸张表情、文字、水印。`
+    const prompt = `忠实临摹参考照片里的宠物，生成彩色写实宠物插画头像。保持原图真实比例：眼睛大小、眼距、脸型、耳朵角度、鼻口位置、胖瘦、年龄感、真实毛色、花纹位置和项圈。线条清晰但必须完整全彩上色，有自然毛发纹理，不要夸张可爱化。干净浅色背景。禁止黑白线稿、素描、铅笔稿、填色书效果、美化、萌化、大眼、圆脸、幼态、Q版、3D、拟人、夸张表情、白色描边、贴纸边、文字、水印。`
     const taskId = await imageGenImage(prompt, mainPhoto)
     generatingText.value = '正在勾勒 TA 的轮廓...'
     const result = await pollImageGenImage(taskId)
@@ -676,7 +718,7 @@ async function handleFineTune() {
       }
     }
     if (changes.length) prompt += changes.join('，') + '。'
-    prompt += '保持彩色写实宠物插画风格，只按参考图修正。保留眼睛大小、眼距、脸型、耳朵角度、鼻口位置、胖瘦、年龄感、毛色、花纹位置和项圈。禁止黑白线稿、素描、铅笔稿、美化、萌化、大眼、圆脸、幼态、Q版。'
+    prompt += '保持彩色写实宠物插画风格，只按参考图修正。线条清晰但必须完整全彩上色。保留眼睛大小、眼距、脸型、耳朵角度、鼻口位置、胖瘦、年龄感、毛色、花纹位置和项圈。禁止黑白线稿、素描、铅笔稿、美化、萌化、大眼、圆脸、幼态、Q版、3D、白色描边、贴纸边。'
 
     const taskId = await imageGenImage(prompt, avatarResult.value!)
     const result = await pollImageGenImage(taskId)
@@ -697,26 +739,12 @@ async function generateCharacterCards() {
   characterCards.value = []
   try {
     const refImage = photos.value[0]?.base64 || avatarResult.value
-    const basePrompt = `用参考照片的真实宠物特征生成同一只宠物的彩色写实全身插画。必须保持眼睛大小、眼距、脸型、耳朵角度、鼻口位置、胖瘦、年龄感、银灰虎斑毛色、花纹位置、项圈。自然毛发纹理，边缘清楚但必须保留完整颜色，完整头到尾。纯白或透明背景。禁止黑白线稿、素描、铅笔稿、填色书效果、美化、萌化、大眼、圆脸、幼态、Q版、3D、拟人、黄色笔触、色块、地面阴影、文字、水印。`
+    const prompt = `根据参考照片生成一张 2x2 四宫格宠物角色设定图，四格必须是同一只宠物、同一画师、同一线条、同一上色、同一头身比例、同一年龄感。风格：彩色写实插画，线条清晰但必须完整全彩上色，自然毛发纹理，可用于后续明信片场景。严格保留原图真实特征：眼睛大小和眼距、脸型、耳朵角度、鼻口比例、胖瘦身材、真实毛色、花纹位置、项圈。四格顺序：左上微侧正坐，右上侧面站着，左下自然小跑，右下侧身趴着。每格宠物完整头到尾，比例一致，纯白背景，无文字无标签无边框。禁止黑白线稿、素描、铅笔稿、填色书效果、美化、萌化、大眼、圆脸、幼态、Q版、3D、贴纸白边、外描边、黄色笔触、地面大阴影、水印。`
 
-    const views = [
-      `${basePrompt}。视角1：三分之二侧身坐姿，表情自然安静，全身完整，尾巴完整可见`,
-      `${basePrompt}。视角2：标准侧面站姿，从左向右看，四肢自然站立，全身完整，尾巴完整可见`,
-      `${basePrompt}。视角3：轻快小跑或跳跃姿势，动作自然但不要夸张，表情真实，全身完整`,
-      `${basePrompt}。视角4：侧身趴卧姿势，头微微抬起，前爪自然伸展，后腿自然弯曲，尾巴完整可见`,
-    ]
-
-    const results: (string | null)[] = [null, null, null, null]
-
-    // 顺序生成更慢，但更稳定：避免并发触发模型限流或前端超时。
-    for (let i = 0; i < views.length; i++) {
-      const taskId = await imageGenImage(views[i], refImage)
-      const result = await pollImageGenImage(taskId)
-      results[i] = result
-      cardProgress.value++
-    }
-
-    const generatedCards = results.filter(Boolean) as string[]
+    const taskId = await imageGenImage(prompt, refImage)
+    const sheet = await pollImageGenImage(taskId)
+    const generatedCards = await splitImageGrid(sheet, 2, 2)
+    cardProgress.value = generatedCards.length
     if (generatedCards.length !== 4) {
       characterCards.value = []
       cardError.value = `四视角需要完整生成 4 张，目前成功 ${generatedCards.length}/4。请重试，或先返回调整头像描述。`
@@ -743,33 +771,23 @@ async function regenerateSelectedCards() {
   tuneMode.value = 'generating'
   tuneGenError.value = ''
   const refImage = photos.value[0]?.base64 || avatarResult.value
-  const basePrompt = `用参考照片的真实宠物特征生成同一只宠物的彩色写实全身插画。必须保持眼睛大小、眼距、脸型、耳朵角度、鼻口位置、胖瘦、年龄感、银灰虎斑毛色、花纹位置、项圈。自然毛发纹理，边缘清楚但必须保留完整颜色，完整头到尾。纯白或透明背景。禁止黑白线稿、素描、铅笔稿、填色书效果、美化、萌化、大眼、圆脸、幼态、Q版、3D、拟人、黄色笔触、色块、地面阴影、文字、水印。`
-
-  const viewPrompts = [
-    `${basePrompt}。视角1：三分之二侧身坐姿，表情自然安静，全身完整，尾巴完整可见`,
-    `${basePrompt}。视角2：标准侧面站姿，从左向右看，四肢自然站立，全身完整，尾巴完整可见`,
-    `${basePrompt}。视角3：轻快小跑或跳跃姿势，动作自然但不要夸张，表情真实，全身完整`,
-    `${basePrompt}。视角4：侧身趴卧姿势，头微微抬起，前爪自然伸展，后腿自然弯曲，尾巴完整可见`,
-  ]
 
   try {
-    for (const i of selectedPerspectives.value) {
-      try {
-        const prompt = `${viewPrompts[i]}。${tunePrompt.value.trim()}`
-        const taskId = await imageGenImage(prompt, characterCards.value[i] || refImage)
-        const result = await pollImageGenImage(taskId)
-        characterCards.value[i] = result
-      } catch {
-        // 单个视角失败不影响其他
-      }
-    }
+    cardProgress.value = 0
+    characterCards.value = []
+    const prompt = `根据参考照片重新生成一张 2x2 四宫格宠物角色设定图，并应用这个修改要求：${tunePrompt.value.trim()}。四格必须是同一只宠物、同一画师、同一线条、同一上色、同一头身比例、同一年龄感。风格：彩色写实插画，线条清晰但必须完整全彩上色，自然毛发纹理。严格保留原图真实特征：眼睛大小和眼距、脸型、耳朵角度、鼻口比例、胖瘦身材、真实毛色、花纹位置、项圈。四格顺序：左上微侧正坐，右上侧面站着，左下自然小跑，右下侧身趴着。每格宠物完整头到尾，比例一致，纯白背景，无文字无标签无边框。禁止黑白线稿、素描、铅笔稿、填色书效果、美化、萌化、大眼、圆脸、幼态、Q版、3D、贴纸白边、外描边、黄色笔触、地面大阴影、水印。`
+    const taskId = await imageGenImage(prompt, refImage)
+    const sheet = await pollImageGenImage(taskId)
+    characterCards.value = await splitImageGrid(sheet, 2, 2)
+    cardProgress.value = characterCards.value.length
+    if (characterCards.value.length !== 4) throw new Error('四视角没有完整生成，请重试')
+    tuneMode.value = null
+    tunePrompt.value = ''
+    selectedPerspectives.value = []
   } catch (e: any) {
     tuneGenError.value = e.message || '生成失败'
+    tuneMode.value = 'prompt'
   }
-
-  tuneMode.value = null
-  tunePrompt.value = ''
-  selectedPerspectives.value = []
 }
 
 function getBestPerspectiveForScene(illustration: string): number {
@@ -796,7 +814,7 @@ async function generatePostcardScene(postcardId: string, charCards: string[]): P
   const sceneDesc = SCENE_PROMPTS[postcard.illustration] || '在温暖梦幻的自然场景中'
   const bestIdx = getBestPerspectiveForScene(postcard.illustration)
   const refCard = charCards[bestIdx] || charCards[0]
-  const prompt = `将参考图中的同一只宠物完整地放在以下明信片场景中：${sceneDesc}。必须保留宠物身份特征：眼睛大小、眼距、脸型、头身比例、胖瘦、年龄感、毛色、花纹位置、眼睛颜色、耳朵和项圈，不能美化、萌化或换成另一只动物。宠物在画面中最多占四分之一，是一个彩色写实插画质感的小身影，自然融入场景，不要像照片硬贴上去。整体是统一的明信片插画风格，柔和自然光，画面安全温馨美好。不要文字、水印、翅膀、光环、黑白线稿。`
+  const prompt = `生成一张完整横向 4:3 明信片正面插画，画面必须铺满整个画布：${sceneDesc}。将参考图中的同一只宠物自然放进场景里，宠物面积小于画面四分之一。必须保留宠物身份特征：眼睛大小、眼距、脸型、头身比例、胖瘦、年龄感、毛色、花纹位置、眼睛颜色、耳朵和项圈，不能美化、萌化或换成另一只动物。整体是统一的彩色写实插画风格，线条清晰但完整全彩上色，柔和自然光，安全温馨。禁止把插画放进黑色/深色卡片、相框、圆角容器或留白画布里；不要黑底、外框、边框、文字、水印、翅膀、光环、黑白线稿。`
 
   try {
     const taskId = await imageGenImage(prompt, refCard)

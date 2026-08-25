@@ -1,7 +1,7 @@
 <template>
   <div class="min-h-screen bg-cream flex flex-col px-6 py-8">
     <!-- 返回 -->
-    <router-link to="/" class="flex items-center gap-1 text-warm-orange text-sm mb-6 w-fit">
+    <router-link to="/home" class="flex items-center gap-1 text-warm-orange text-sm mb-6 w-fit">
       <ArrowLeft class="w-4 h-4" />
       返回
     </router-link>

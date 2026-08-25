@@ -70,6 +70,10 @@ const POSTCARD_TEMPLATES: Omit<Postcard, 'id' | 'isFavorite' | 'date' | 'created
 
 const DATA_VERSION = 11
 
+function buildFallbackPostcardText(petName = 'TA', petType = '宠物', sceneName = '远方') {
+  return `我是${petName}，今天到了${sceneName}。这里很安静，光也很暖。我像一只小小的${petType}一样慢慢走走看看，偶尔停下来闻一闻风。请放心，我在这里过得很好，也会把一路上的小事寄给你。`
+}
+
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
 }
@@ -223,12 +227,12 @@ export const useAppStore = defineStore('app', () => {
 
     try {
       const text = await generateAiText(prompt)
-      if (text.trim()) {
-        postcard.frontText = text.trim().replace(/[【（]邮戳位置[】）]/g, '')
-        saveToStorage()
-      }
+      const cleaned = text.trim().replace(/[【（]邮戳位置[】）]/g, '')
+      postcard.frontText = cleaned || buildFallbackPostcardText(pet.name, pet.type, sceneName)
+      saveToStorage()
     } catch {
-      // 生成失败则保留空，不影响主流程
+      postcard.frontText = buildFallbackPostcardText(pet.name, pet.type, sceneName)
+      saveToStorage()
     }
   }
 

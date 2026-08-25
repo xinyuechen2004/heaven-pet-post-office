@@ -1,4 +1,4 @@
-import { hasGeminiKey, hasSiliconFlowKey, imageModel, imageProvider, textModel, textToImageModel } from './_gemini.mjs'
+import { hasGeminiKey, hasSiliconFlowKey, imageModel, imageProvider, siliconFlowTextModel, textModel, textToImageModel } from './_gemini.mjs'
 
 export default function handler(_req, res) {
   res.status(200).json({
@@ -7,6 +7,7 @@ export default function handler(_req, res) {
     siliconflow: hasSiliconFlowKey(),
     imageProvider,
     textModel,
+    siliconFlowTextModel,
     imageModel,
     textToImageModel,
   })
