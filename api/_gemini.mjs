@@ -16,7 +16,7 @@ function numberEnv(name, fallback) {
   return Number.isFinite(value) && value > 0 ? value : fallback
 }
 
-const siliconFlowEditSteps = numberEnv('SILICONFLOW_IMAGE_STEPS', 12)
+const siliconFlowEditSteps = numberEnv('SILICONFLOW_IMAGE_STEPS', 18)
 const siliconFlowTextToImageSteps = numberEnv('SILICONFLOW_TEXT_TO_IMAGE_STEPS', 16)
 
 export function hasGeminiKey() {
