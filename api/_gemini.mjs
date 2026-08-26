@@ -11,6 +11,14 @@ export const imageModel = process.env.SILICONFLOW_IMAGE_MODEL || 'Qwen/Qwen-Imag
 export const textToImageModel = process.env.SILICONFLOW_TEXT_TO_IMAGE_MODEL || 'Kwai-Kolors/Kolors'
 export const imageProvider = siliconFlowApiKey ? 'siliconflow' : 'gemini-fallback'
 
+function numberEnv(name, fallback) {
+  const value = Number(process.env[name])
+  return Number.isFinite(value) && value > 0 ? value : fallback
+}
+
+const siliconFlowEditSteps = numberEnv('SILICONFLOW_IMAGE_STEPS', 12)
+const siliconFlowTextToImageSteps = numberEnv('SILICONFLOW_TEXT_TO_IMAGE_STEPS', 16)
+
 export function hasGeminiKey() {
   return Boolean(client)
 }
@@ -153,7 +161,7 @@ async function editImageWithSiliconFlow(prompt, imageBase64, imageBase64List = [
     model: imageModel,
     prompt,
     image: normalizeImageDataUrlForSiliconFlow(imageBase64),
-    num_inference_steps: 20,
+    num_inference_steps: siliconFlowEditSteps,
     guidance_scale: 4,
   }
   extraImages.forEach((image, index) => {
@@ -173,7 +181,7 @@ async function generateImageWithSiliconFlow(prompt) {
       prompt,
       image_size: '1024x1024',
       batch_size: 1,
-      num_inference_steps: 20,
+      num_inference_steps: siliconFlowTextToImageSteps,
       guidance_scale: 7.5,
     }),
     provider: 'siliconflow',

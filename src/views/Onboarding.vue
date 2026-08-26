@@ -736,6 +736,14 @@ function removePhoto(idx: number) {
   photos.value.splice(idx, 1)
 }
 
+function friendlyImageError(e: any, fallback = 'AI 图片没有生成成功，请稍后再试。') {
+  const message = e?.message || ''
+  if (message.includes('超时') || message.includes('timeout')) {
+    return 'AI 生成这次排队太久了。请等一分钟后再重新生成，不要连续点击，避免重复消耗额度。'
+  }
+  return message ? `${fallback.replace('请稍后再试。', '')}：${message}` : fallback
+}
+
 async function startGenerateAvatar() {
   step.value = 3
   generating.value = true
@@ -755,9 +763,7 @@ async function generateAvatar() {
   } catch (e: any) {
     avatarResult.value = null
     initialAvatar.value = null
-    genError.value = e?.message
-      ? `AI 画像没有生成成功：${e.message}`
-      : 'AI 画像没有生成成功，请重试。'
+    genError.value = friendlyImageError(e, 'AI 画像没有生成成功，请稍后再试。')
   } finally {
     generating.value = false
   }
@@ -827,7 +833,7 @@ async function generateCharacterCards() {
     }
     characterCards.value = generatedCards
   } catch (e: any) {
-    cardError.value = e.message || '生成失败'
+    cardError.value = friendlyImageError(e, '四视角没有生成成功，请稍后再试。')
   } finally {
     generatingCards.value = false
   }
