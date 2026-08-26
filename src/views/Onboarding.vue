@@ -616,7 +616,7 @@ function splitImageGrid(dataUrl: string, rows = 2, cols = 2): Promise<string[]> 
   })
 }
 
-function cropOuterFrame(dataUrl: string): Promise<string> {
+function cropDarkFrame(dataUrl: string): Promise<string> {
   return new Promise((resolve) => {
     const img = new Image()
     img.onload = () => {
@@ -631,68 +631,44 @@ function cropOuterFrame(dataUrl: string): Promise<string> {
       sourceCtx.drawImage(img, 0, 0)
       const pixels = sourceCtx.getImageData(0, 0, img.width, img.height).data
 
-      const getRgb = (x: number, y: number) => {
-        const i = (y * img.width + x) * 4
-        return [pixels[i], pixels[i + 1], pixels[i + 2]]
-      }
-
-      const cornerSamples = [
-        getRgb(2, 2),
-        getRgb(img.width - 3, 2),
-        getRgb(2, img.height - 3),
-        getRgb(img.width - 3, img.height - 3),
-      ]
-      const frameColor = cornerSamples.reduce(
-        (acc, color) => [acc[0] + color[0], acc[1] + color[1], acc[2] + color[2]],
-        [0, 0, 0],
-      ).map(v => v / cornerSamples.length)
-
-      const distanceToFrameColor = (r: number, g: number, b: number) => {
-        return Math.sqrt(
-          (r - frameColor[0]) ** 2 +
-          (g - frameColor[1]) ** 2 +
-          (b - frameColor[2]) ** 2,
-        )
-      }
-
-      const isFramePixel = (x: number, y: number) => {
-        const [r, g, b] = getRgb(x, y)
-        const brightness = (r + g + b) / 3
-        return distanceToFrameColor(r, g, b) < 42 && brightness < 245
-      }
-
-      let left = img.width
-      let right = 0
-      let top = img.height
-      let bottom = 0
-      const stepSize = Math.max(1, Math.floor(Math.min(img.width, img.height) / 700))
-
-      for (let y = 0; y < img.height; y += stepSize) {
-        for (let x = 0; x < img.width; x += stepSize) {
-          if (!isFramePixel(x, y)) {
-            left = Math.min(left, x)
-            right = Math.max(right, x)
-            top = Math.min(top, y)
-            bottom = Math.max(bottom, y)
-          }
+      const isDarkColumn = (x: number) => {
+        let dark = 0
+        for (let y = 0; y < img.height; y++) {
+          const i = (y * img.width + x) * 4
+          const brightness = (pixels[i] + pixels[i + 1] + pixels[i + 2]) / 3
+          if (brightness < 34) dark++
         }
+        return dark / img.height > 0.82
       }
 
-      if (left >= right || top >= bottom) {
-        resolve(dataUrl)
-        return
+      const isDarkRow = (y: number) => {
+        let dark = 0
+        for (let x = 0; x < img.width; x++) {
+          const i = (y * img.width + x) * 4
+          const brightness = (pixels[i] + pixels[i + 1] + pixels[i + 2]) / 3
+          if (brightness < 34) dark++
+        }
+        return dark / img.width > 0.82
       }
 
-      const padding = Math.max(2, Math.floor(Math.min(img.width, img.height) * 0.006))
-      left = Math.max(0, left - padding)
-      top = Math.max(0, top - padding)
-      right = Math.min(img.width - 1, right + padding)
-      bottom = Math.min(img.height - 1, bottom + padding)
+      let left = 0
+      let right = img.width - 1
+      let top = 0
+      let bottom = img.height - 1
+      while (left < right && isDarkColumn(left)) left++
+      while (right > left && isDarkColumn(right)) right--
+      while (top < bottom && isDarkRow(top)) top++
+      while (bottom > top && isDarkRow(bottom)) bottom--
+
+      left = Math.max(0, left - 2)
+      top = Math.max(0, top - 2)
+      right = Math.min(img.width - 1, right + 2)
+      bottom = Math.min(img.height - 1, bottom + 2)
 
       const croppedWidth = right - left + 1
       const croppedHeight = bottom - top + 1
-      const changedEnough = croppedWidth < img.width - 16 || croppedHeight < img.height - 16
-      if (!changedEnough || croppedWidth < img.width * 0.25 || croppedHeight < img.height * 0.25) {
+      const changedEnough = croppedWidth < img.width - 12 || croppedHeight < img.height - 12
+      if (!changedEnough || croppedWidth < img.width * 0.35 || croppedHeight < img.height * 0.35) {
         resolve(dataUrl)
         return
       }
@@ -706,40 +682,6 @@ function cropOuterFrame(dataUrl: string): Promise<string> {
         return
       }
       ctx.drawImage(img, left, top, croppedWidth, croppedHeight, 0, 0, croppedWidth, croppedHeight)
-      resolve(canvas.toDataURL('image/jpeg', 0.94))
-    }
-    img.onerror = () => resolve(dataUrl)
-    img.src = dataUrl
-  })
-}
-
-function coverImageToAspectRatio(dataUrl: string, aspectRatio = 4 / 3): Promise<string> {
-  return new Promise((resolve) => {
-    const img = new Image()
-    img.onload = () => {
-      const width = 1200
-      const height = Math.round(width / aspectRatio)
-      const canvas = document.createElement('canvas')
-      canvas.width = width
-      canvas.height = height
-      const ctx = canvas.getContext('2d')
-      if (!ctx) {
-        resolve(dataUrl)
-        return
-      }
-      const sourceRatio = img.width / img.height
-      let drawWidth = width
-      let drawHeight = height
-      if (sourceRatio > aspectRatio) {
-        drawHeight = height
-        drawWidth = height * sourceRatio
-      } else {
-        drawWidth = width
-        drawHeight = width / sourceRatio
-      }
-      const x = (width - drawWidth) / 2
-      const y = (height - drawHeight) / 2
-      ctx.drawImage(img, x, y, drawWidth, drawHeight)
       resolve(canvas.toDataURL('image/jpeg', 0.94))
     }
     img.onerror = () => resolve(dataUrl)
@@ -804,7 +746,7 @@ async function startGenerateAvatar() {
 async function generateAvatar() {
   try {
     const mainPhoto = photos.value[0].base64
-    const prompt = `忠实临摹参考照片里的宠物，生成彩色写实宠物插画头像。保持原图真实比例：眼睛大小、眼距、脸型、耳朵角度、鼻口位置、胖瘦、年龄感、真实毛色、花纹位置和项圈。线条清晰但必须完整全彩上色，有自然毛发纹理，不要夸张可爱化。干净浅色背景。宠物边缘必须是自然毛发边缘，禁止在宠物外轮廓外添加任何白色/黄色/彩色描边、贴纸边、外发光、圆形光圈、背景圈。禁止黑白线稿、素描、铅笔稿、填色书效果、美化、萌化、大眼、圆脸、幼态、Q版、3D、拟人、夸张表情、文字、水印。`
+    const prompt = `忠实临摹参考照片里的宠物，生成彩色写实宠物插画头像。保持原图真实比例：眼睛大小、眼距、脸型、耳朵角度、鼻口位置、胖瘦、年龄感、真实毛色、花纹位置和项圈。线条清晰但必须完整全彩上色，有自然毛发纹理，不要夸张可爱化。干净浅色背景。禁止黑白线稿、素描、铅笔稿、填色书效果、美化、萌化、大眼、圆脸、幼态、Q版、3D、拟人、夸张表情、白色描边、贴纸边、文字、水印。`
     const taskId = await imageGenImage(prompt, mainPhoto)
     generatingText.value = '正在勾勒 TA 的轮廓...'
     const result = await pollImageGenImage(taskId)
@@ -849,7 +791,7 @@ async function handleFineTune() {
       }
     }
     if (changes.length) prompt += changes.join('，') + '。'
-    prompt += '保持彩色写实宠物插画风格，只按参考图修正。线条清晰但必须完整全彩上色。保留眼睛大小、眼距、脸型、耳朵角度、鼻口位置、胖瘦、年龄感、毛色、花纹位置和项圈。宠物边缘必须是自然毛发边缘，禁止在宠物外轮廓外添加任何白色/黄色/彩色描边、贴纸边、外发光、圆形光圈、背景圈。禁止黑白线稿、素描、铅笔稿、美化、萌化、大眼、圆脸、幼态、Q版、3D。'
+    prompt += '保持彩色写实宠物插画风格，只按参考图修正。线条清晰但必须完整全彩上色。保留眼睛大小、眼距、脸型、耳朵角度、鼻口位置、胖瘦、年龄感、毛色、花纹位置和项圈。禁止黑白线稿、素描、铅笔稿、美化、萌化、大眼、圆脸、幼态、Q版、3D、白色描边、贴纸边。'
 
     const taskId = await imageGenImage(prompt, avatarResult.value!)
     const result = await pollImageGenImage(taskId)
@@ -872,7 +814,7 @@ async function generateCharacterCards() {
     const styleRef = avatarResult.value || photos.value[0]?.base64
     const photoRef = photos.value[0]?.base64
     const extraRefs = photoRef && photoRef !== styleRef ? [photoRef] : []
-    const prompt = `参考图1是已确认头像，只延续宠物本体的线条、上色、毛发、脸部和项圈，忽略参考图里的圆形背景、光圈或外描边；参考图2如有，只校准真实特征。生成一张 2x2 白底四连图，像同一页画册里的四张普通宠物插画，不是贴纸、图标、cutout、角色素材。四格必须是同一只宠物、同一画师、同一线条、同一上色、同一头身比例、同一年龄感。彩色写实插画，线条清晰，完整全彩上色，可融入后续明信片场景。严格保留真实特征：眼睛大小和眼距、脸型、耳朵角度、鼻口比例、胖瘦身材、真实毛色、花纹位置、项圈。四格顺序：左上微侧正坐，右上侧面站着，左下自然小跑，右下侧身趴着。每格只有宠物本体和项圈，完整头到尾，比例一致，纯白背景直接贴到毛发边缘。绝对禁止在动物外轮廓外添加任何黄色/白色/彩色描边、贴纸边、外发光、轮廓光；禁止毯子、垫子、地面、椭圆阴影、装饰物、道具、背景、文字、标签、边框、黑白线稿、素描、铅笔稿、填色书效果、美化、萌化、大眼、圆脸、幼态、Q版、3D、水印。`
+    const prompt = `参考图1是已经确认的宠物头像和画风，必须以参考图1为主，延续它的线条粗细、上色方式、毛发质感、脸部特征和项圈；参考图2如有，只用于校准真实身份特征。生成一张 2x2 四宫格宠物角色设定图，四格必须是同一只宠物、同一画师、同一线条、同一上色、同一头身比例、同一年龄感。风格：彩色写实插画，线条清晰但必须完整全彩上色，可用于后续明信片场景。严格保留真实特征：眼睛大小和眼距、脸型、耳朵角度、鼻口比例、胖瘦身材、真实毛色、花纹位置、项圈。四格顺序：左上微侧正坐，右上侧面站着，左下自然小跑，右下侧身趴着。每格只出现宠物本体和项圈，完整头到尾，比例一致，纯白背景。禁止白色描边、贴纸边、外轮廓光边、毯子、垫子、地面、椭圆阴影、装饰物、道具、背景、文字、标签、边框、黑白线稿、素描、铅笔稿、填色书效果、美化、萌化、大眼、圆脸、幼态、Q版、3D、水印。`
 
     const taskId = await imageGenImage(prompt, styleRef!, extraRefs)
     const sheet = await pollImageGenImage(taskId)
@@ -910,7 +852,7 @@ async function regenerateSelectedCards() {
   try {
     cardProgress.value = 0
     characterCards.value = []
-    const prompt = `参考图1是已确认头像，只延续宠物本体的线条、上色、毛发、脸部和项圈，忽略参考图里的圆形背景、光圈或外描边；参考图2如有，只校准真实特征。重新生成一张 2x2 白底四连图，并应用这个修改要求：${tunePrompt.value.trim()}。像同一页画册里的四张普通宠物插画，不是贴纸、图标、cutout、角色素材。四格必须是同一只宠物、同一画师、同一线条、同一上色、同一头身比例、同一年龄感。彩色写实插画，线条清晰，完整全彩上色。严格保留真实特征：眼睛大小和眼距、脸型、耳朵角度、鼻口比例、胖瘦身材、真实毛色、花纹位置、项圈。四格顺序：左上微侧正坐，右上侧面站着，左下自然小跑，右下侧身趴着。每格只有宠物本体和项圈，完整头到尾，比例一致，纯白背景直接贴到毛发边缘。绝对禁止在动物外轮廓外添加任何黄色/白色/彩色描边、贴纸边、外发光、轮廓光；禁止毯子、垫子、地面、椭圆阴影、装饰物、道具、背景、文字、标签、边框、黑白线稿、素描、铅笔稿、填色书效果、美化、萌化、大眼、圆脸、幼态、Q版、3D、水印。`
+    const prompt = `参考图1是已经确认的宠物头像和画风，必须以参考图1为主，延续它的线条粗细、上色方式、毛发质感、脸部特征和项圈；参考图2如有，只用于校准真实身份特征。重新生成一张 2x2 四宫格宠物角色设定图，并应用这个修改要求：${tunePrompt.value.trim()}。四格必须是同一只宠物、同一画师、同一线条、同一上色、同一头身比例、同一年龄感。风格：彩色写实插画，线条清晰但必须完整全彩上色。严格保留真实特征：眼睛大小和眼距、脸型、耳朵角度、鼻口比例、胖瘦身材、真实毛色、花纹位置、项圈。四格顺序：左上微侧正坐，右上侧面站着，左下自然小跑，右下侧身趴着。每格只出现宠物本体和项圈，完整头到尾，比例一致，纯白背景。禁止白色描边、贴纸边、外轮廓光边、毯子、垫子、地面、椭圆阴影、装饰物、道具、背景、文字、标签、边框、黑白线稿、素描、铅笔稿、填色书效果、美化、萌化、大眼、圆脸、幼态、Q版、3D、水印。`
     const taskId = await imageGenImage(prompt, styleRef!, extraRefs)
     const sheet = await pollImageGenImage(taskId)
     characterCards.value = await splitImageGrid(sheet, 2, 2)
@@ -954,8 +896,7 @@ async function generatePostcardScene(postcardId: string, charCards: string[]): P
   try {
     const taskId = await imageGenImage(prompt, refCard)
     const result = await pollImageGenImage(taskId)
-    const cropped = await cropOuterFrame(result)
-    return coverImageToAspectRatio(cropped, 4 / 3)
+    return cropDarkFrame(result)
   } catch {
     return null
   }
