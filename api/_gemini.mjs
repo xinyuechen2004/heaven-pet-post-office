@@ -154,7 +154,7 @@ async function editImageWithSiliconFlow(prompt, imageBase64, imageBase64List = [
     prompt,
     image: normalizeImageDataUrlForSiliconFlow(imageBase64),
     num_inference_steps: 20,
-    guidance_scale: 4,
+    guidance_scale: 5.5,
   }
   extraImages.forEach((image, index) => {
     payload[`image${index + 2}`] = normalizeImageDataUrlForSiliconFlow(image)
