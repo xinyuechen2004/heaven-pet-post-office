@@ -818,11 +818,10 @@ async function generateCharacterCards() {
   characterCards.value = []
   try {
     const styleRef = avatarResult.value || photos.value[0]?.base64
-    const photoRef = photos.value[0]?.base64
-    const extraRefs = photoRef && photoRef !== styleRef ? [photoRef] : []
-    const prompt = `参考图1是已确认的宠物画像和画风，参考图2如有，是原始照片，用来校准真实身份。生成一张 2x2 四宫格宠物姿态参考图，四格必须像同一只真实宠物在同一套画风下的不同姿态，不是四只不同动物，也不是贴纸、表情包、游戏立绘或抠图素材。无论参考图里是猫、狗、兔子、仓鼠、鸟或其他宠物，都必须锁定原物种、品种感、真实年龄感、胖瘦体型、头身比例、脸型、耳朵/眼睛/鼻口/四肢/尾巴比例、毛发长度、毛色冷暖、明暗关系、花纹/斑点/渐层/特殊标记的位置和形状。禁止改变物种、品种、毛色、花纹、体型、五官比例或性格气质；禁止把宠物画成更萌、更幼、更夸张、更戏剧化或另一只动物。只保留照片里真实存在的配饰，禁止新增铃铛、吊坠、牌子、项圈、蝴蝶结。风格为清晰彩色写实插画，完整全彩上色，线条自然干净，可融入后续明信片场景。四格顺序：左上微侧正坐，右上侧面站着，左下自然小跑，右下侧身趴着。每格只出现宠物本体，完整头到尾，比例一致，纯白背景，宠物边缘必须自然融入白底。绝对禁止任何描边或边缘效果：不要绿色描边、黄色描边、白色描边、贴纸边、荧光边、发光轮廓、选中高亮边、外轮廓光边、抠图边。禁止毯子、垫子、地面、阴影底座、装饰物、道具、背景、文字、标签、边框、黑白线稿、素描、铅笔稿、填色书效果、怪物化、异形化、美化、萌化、大眼、圆脸、幼态、Q版、3D、水印。`
+    const lightStyleRef = await store.compressImage(styleRef!, 768)
+    const prompt = `以参考图中的同一只宠物为唯一身份锚点，生成一张 2x2 四宫格姿态参考图。四格必须是同一只宠物、同一画风、同一毛色花纹、同一体型比例，不要画成四只不同动物。保持原物种、品种感、年龄感、胖瘦、头身比例、五官比例、耳朵/四肢/尾巴比例、毛色、花纹/斑点/渐层/特殊标记和真实存在的配饰。四格姿态：微侧正坐、侧面站立、自然小跑、侧身趴着。每格只画宠物本体，完整头到尾，纯白背景，自然边缘。风格：清晰彩色写实插画，可融入后续明信片场景。禁止改变物种/品种/毛色/花纹/体型/五官，禁止新增配饰，禁止贴纸感、任何描边、荧光边、抠图边、底座、阴影垫、道具、文字、边框、黑白线稿、3D、怪物化、萌化、大眼幼态。`
 
-    const taskId = await imageGenImage(prompt, styleRef!, extraRefs)
+    const taskId = await imageGenImage(prompt, lightStyleRef)
     const sheet = await pollImageGenImage(taskId)
     const generatedCards = await splitImageGrid(sheet, 2, 2)
     cardProgress.value = generatedCards.length
