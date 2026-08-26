@@ -126,8 +126,8 @@
 
           <!-- 生成结果 -->
           <div v-else-if="avatarResult" class="space-y-6">
-            <div class="relative mx-auto w-48 h-48 rounded-full overflow-hidden bg-linen">
-              <img :src="avatarResult" class="w-full h-full object-cover" alt="" />
+            <div class="relative mx-auto w-48 h-48 rounded-3xl overflow-hidden bg-linen">
+              <img :src="avatarResult" class="w-full h-full object-contain" alt="" />
             </div>
             <p class="text-xs text-faint-gray">内容由 AI 生成</p>
             <p v-if="genError" class="text-sm text-dusty-rose leading-relaxed">
@@ -185,8 +185,8 @@
         <div class="space-y-6 animate-fade-in">
           <h2 class="text-[22px] font-medium text-deep-gray text-center">再看看，TA 是这个样子吗？</h2>
 
-          <div v-if="avatarResult" class="mx-auto w-40 h-40 rounded-full overflow-hidden bg-linen">
-            <img :src="avatarResult" class="w-full h-full object-cover" alt="" />
+          <div v-if="avatarResult" class="mx-auto w-40 h-40 rounded-3xl overflow-hidden bg-linen">
+            <img :src="avatarResult" class="w-full h-full object-contain" alt="" />
           </div>
 
           <div class="bg-peach-tint rounded-card px-4 py-3 text-center">
@@ -746,7 +746,7 @@ async function startGenerateAvatar() {
 async function generateAvatar() {
   try {
     const mainPhoto = photos.value[0].base64
-    const prompt = `忠实临摹参考照片里的宠物，生成彩色写实宠物插画头像。保持原图真实比例：眼睛大小、眼距、脸型、耳朵角度、鼻口位置、胖瘦、年龄感、真实毛色、花纹位置和项圈。线条清晰但必须完整全彩上色，有自然毛发纹理，不要夸张可爱化。干净浅色背景。禁止黑白线稿、素描、铅笔稿、填色书效果、美化、萌化、大眼、圆脸、幼态、Q版、3D、拟人、夸张表情、白色描边、贴纸边、文字、水印。`
+    const prompt = `根据参考照片生成一张方形画布里的彩色写实宠物半身肖像插画，不是圆形头像贴纸。宠物头部、双耳、脖子和照片中真实存在的配饰必须完整出现在画面里，四周留少量浅色背景，不要裁切耳朵。严格保持原图真实比例：眼睛大小、眼距、脸型、耳朵角度、鼻口位置、胖瘦、年龄感、真实毛色、花纹位置。只保留照片里真实存在的配饰，禁止新增铃铛、吊坠、牌子、项圈或蝴蝶结。线条清晰但完整全彩上色，有自然毛发纹理，不要夸张可爱化。禁止黑白线稿、素描、铅笔稿、美化、萌化、大眼、圆脸、幼态、Q版、3D、拟人、夸张表情、白色描边、贴纸边、文字、水印。`
     const taskId = await imageGenImage(prompt, mainPhoto)
     generatingText.value = '正在勾勒 TA 的轮廓...'
     const result = await pollImageGenImage(taskId)
@@ -791,7 +791,7 @@ async function handleFineTune() {
       }
     }
     if (changes.length) prompt += changes.join('，') + '。'
-    prompt += '保持彩色写实宠物插画风格，只按参考图修正。线条清晰但必须完整全彩上色。保留眼睛大小、眼距、脸型、耳朵角度、鼻口位置、胖瘦、年龄感、毛色、花纹位置和项圈。禁止黑白线稿、素描、铅笔稿、美化、萌化、大眼、圆脸、幼态、Q版、3D、白色描边、贴纸边。'
+    prompt += '保持彩色写实宠物插画风格，只按参考图修正。线条清晰但必须完整全彩上色。保留眼睛大小、眼距、脸型、耳朵角度、鼻口位置、胖瘦、年龄感、毛色、花纹位置和照片中真实存在的配饰。只保留照片里真实存在的配饰，禁止新增铃铛、吊坠、牌子、项圈或蝴蝶结。禁止黑白线稿、素描、铅笔稿、美化、萌化、大眼、圆脸、幼态、Q版、3D、白色描边、贴纸边。'
 
     const taskId = await imageGenImage(prompt, avatarResult.value!)
     const result = await pollImageGenImage(taskId)
