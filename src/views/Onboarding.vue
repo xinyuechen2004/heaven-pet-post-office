@@ -817,11 +817,16 @@ async function generateCharacterCards() {
   cardProgress.value = 0
   characterCards.value = []
   try {
-    const styleRef = avatarResult.value || photos.value[0]?.base64
-    const lightStyleRef = await store.compressImage(styleRef!, 768)
-    const prompt = `以参考图中的同一只宠物为唯一身份锚点，生成一张 2x2 四宫格姿态参考图。四格必须是同一只宠物、同一画风、同一毛色花纹、同一体型比例，不要画成四只不同动物。保持原物种、品种感、年龄感、胖瘦、头身比例、五官比例、耳朵/四肢/尾巴比例、毛色、花纹/斑点/渐层/特殊标记和真实存在的配饰。四格姿态：微侧正坐、侧面站立、自然小跑、侧身趴着。每格只画宠物本体，完整头到尾，纯白背景，自然边缘。风格：清晰彩色写实插画，可融入后续明信片场景。禁止改变物种/品种/毛色/花纹/体型/五官，禁止新增配饰，禁止贴纸感、任何描边、荧光边、抠图边、底座、阴影垫、道具、文字、边框、黑白线稿、3D、怪物化、萌化、大眼幼态。`
+    const originalPhotoRef = photos.value[0]?.base64
+    const confirmedAvatarRef = avatarResult.value
+    const primaryIdentityRef = originalPhotoRef || confirmedAvatarRef
+    const lightIdentityRef = await store.compressImage(primaryIdentityRef!, 768)
+    const lightStyleRef = confirmedAvatarRef
+      ? await store.compressImage(confirmedAvatarRef, 512)
+      : null
+    const prompt = `参考图1是用户上传的真实宠物照片，是身份最高优先级；参考图2如有，是已确认头像，只能参考线条和上色风格，不能覆盖参考图1的真实身份。生成一张 2x2 四宫格彩色姿态参考图：左上微侧正坐、右上侧面站立、左下自然小跑、右下侧身趴着。四格必须是同一只宠物、同一物种/品种感、同一年龄、同一体型比例、同一五官比例、同一毛色、同一花纹/斑点/渐层/特殊标记、同一真实存在的配饰。不要把宠物画成另一只动物；不要凭想象加深、改色、换纹路、换脸、换品种。每格只画宠物本体，完整头到尾，纯白背景，自然边缘。风格为清晰全彩写实插画，可融入后续明信片场景，但不要Q版化。绝对禁止任何外轮廓描边或贴纸边，包括白边、黄边、绿边、青色边、RGB错位边、荧光边、光晕边、抠图边；禁止底座、毯子、地面、椭圆阴影、道具、文字、边框、黑白线稿、3D、怪物化、萌化、大眼幼态、新增配饰。`
 
-    const taskId = await imageGenImage(prompt, lightStyleRef)
+    const taskId = await imageGenImage(prompt, lightIdentityRef, lightStyleRef ? [lightStyleRef] : [])
     const sheet = await pollImageGenImage(taskId)
     const generatedCards = await splitImageGrid(sheet, 2, 2)
     cardProgress.value = generatedCards.length
@@ -850,15 +855,19 @@ function togglePerspective(idx: number) {
 async function regenerateSelectedCards() {
   tuneMode.value = 'generating'
   tuneGenError.value = ''
-  const styleRef = avatarResult.value || photos.value[0]?.base64
-  const photoRef = photos.value[0]?.base64
-  const extraRefs = photoRef && photoRef !== styleRef ? [photoRef] : []
+  const originalPhotoRef = photos.value[0]?.base64
+  const confirmedAvatarRef = avatarResult.value
+  const primaryIdentityRef = originalPhotoRef || confirmedAvatarRef
 
   try {
     cardProgress.value = 0
     characterCards.value = []
-    const prompt = `参考图1是已经确认的宠物头像和画风，必须以参考图1为主，延续它的线条粗细、上色方式、毛发质感、脸部特征和项圈；参考图2如有，只用于校准真实身份特征。重新生成一张 2x2 四宫格宠物角色设定图，并应用这个修改要求：${tunePrompt.value.trim()}。四格必须是同一只宠物、同一画师、同一线条、同一上色、同一头身比例、同一年龄感。风格：彩色写实插画，线条清晰但必须完整全彩上色。严格保留真实特征：眼睛大小和眼距、脸型、耳朵角度、鼻口比例、胖瘦身材、真实毛色、花纹位置、项圈。四格顺序：左上微侧正坐，右上侧面站着，左下自然小跑，右下侧身趴着。每格只出现宠物本体和项圈，完整头到尾，比例一致，纯白背景。禁止白色描边、贴纸边、外轮廓光边、毯子、垫子、地面、椭圆阴影、装饰物、道具、背景、文字、标签、边框、黑白线稿、素描、铅笔稿、填色书效果、美化、萌化、大眼、圆脸、幼态、Q版、3D、水印。`
-    const taskId = await imageGenImage(prompt, styleRef!, extraRefs)
+    const lightIdentityRef = await store.compressImage(primaryIdentityRef!, 768)
+    const lightStyleRef = confirmedAvatarRef
+      ? await store.compressImage(confirmedAvatarRef, 512)
+      : null
+    const prompt = `参考图1是用户上传的真实宠物照片，是身份最高优先级；参考图2如有，只能参考线条和上色风格。按用户修改要求重新生成一张 2x2 四宫格彩色姿态参考图：${tunePrompt.value.trim()}。如果修改要求与真实照片冲突，以参考图1为准。四格必须是同一只宠物、同一物种/品种感、同一年龄、同一体型比例、同一五官比例、同一毛色、同一花纹/斑点/渐层/特殊标记、同一真实存在的配饰。不要把宠物画成另一只动物；不要凭想象加深、改色、换纹路、换脸、换品种。四格顺序：左上微侧正坐，右上侧面站立，左下自然小跑，右下侧身趴着。每格只画宠物本体，完整头到尾，纯白背景，自然边缘。风格为清晰全彩写实插画，可融入后续明信片场景。绝对禁止任何外轮廓描边或贴纸边，包括白边、黄边、绿边、青色边、RGB错位边、荧光边、光晕边、抠图边；禁止底座、毯子、地面、椭圆阴影、道具、文字、边框、黑白线稿、3D、怪物化、萌化、大眼幼态、新增配饰。`
+    const taskId = await imageGenImage(prompt, lightIdentityRef, lightStyleRef ? [lightStyleRef] : [])
     const sheet = await pollImageGenImage(taskId)
     characterCards.value = await splitImageGrid(sheet, 2, 2)
     cardProgress.value = characterCards.value.length
