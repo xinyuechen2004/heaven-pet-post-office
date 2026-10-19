@@ -57,6 +57,19 @@ export const SCENE_PROMPTS: Record<string, string> = {
   'forest-mailbox': '森林中的小邮筒，阳光透过树叶洒下斑驳光影，一个可爱的邮筒静静立在林间空地，周围有小蘑菇和野花，温暖明亮',
 }
 
+const SCENE_COMPOSITIONS: Record<string, string> = {
+  'warm-meadow': '宠物在画面左下角小小地侧身趴在草地里，像正在晒太阳；不要看镜头',
+  'post-office': '宠物在画面右下角的小邮局门边安静坐着，像刚把信送到；不要看镜头',
+  'forest-mailbox': '宠物在画面左下角靠近邮筒闻一朵小花，身体很小，森林占据绝大部分画面',
+  'star-lighthouse': '宠物在画面左下角背对或侧对镜头坐着看远处灯塔和海面，像一个小小剪影',
+  'flower-path': '宠物在画面右下角沿花路向远处慢慢走，环境和道路占据绝大部分画面',
+  'moon-station': '宠物在画面左下角的站台长椅旁安静坐着，月光车站是画面主体',
+  'glass-lake': '宠物在画面右下角湖边低头看水面倒影，湖水和远景占据绝大部分画面',
+  'sunny-windowsill': '宠物在画面左下角窗台一端小小地蜷卧晒太阳，窗外花园是画面主体',
+  'windchime-garden': '宠物在画面右下角花丛边抬头看风铃，花园占据绝大部分画面',
+  'star-boat': '宠物小小地坐在画面左下方的小船一角，望向湖面和星空，不要看镜头',
+}
+
 const POSTCARD_TEMPLATES: Omit<Postcard, 'id' | 'isFavorite' | 'date' | 'createdAt' | 'sceneImage'>[] = [
   { illustration: 'warm-meadow', frontText: '', location: '暖暖草地', stamp: '草地邮局' },
   { illustration: 'post-office', frontText: '', location: '小邮局', stamp: '小邮局' },
@@ -287,7 +300,8 @@ ${avoidContext}
     if (cards.length === 0) throw new Error('缺少宠物形象资料，暂时无法生成来信')
     const refCard = cards[bestPerspectiveForScene(postcard.illustration)] || cards[0]
     const sceneDesc = SCENE_PROMPTS[postcard.illustration] || '在温暖明亮的自然场景中'
-    const prompt = `生成一张完整横向4:3明信片正面插画，画面铺满整个画布：${sceneDesc}。参考图中的宠物必须自然融入场景，保持同一只宠物的脸型、体型、年龄感、毛色、花纹、眼睛颜色、耳朵和真实配饰。宠物占画面约15%-22%，位于中景，以全身或大半身做符合场景的日常动作，不要巨大正脸，不要直勾勾凝视镜头。整体为清透、明亮、柔和的动画电影插画，带自然毛发结构和完整环境叙事。禁止黑底、留白、边框、竖图嵌入横图、文字、水印、翅膀、光环、遗照感、阴森感、恐怖感、宠物贴纸、白色描边、3D塑料感。`
+    const composition = SCENE_COMPOSITIONS[postcard.illustration] || '宠物在画面左下角做一个自然的小动作，不要看镜头'
+    const prompt = `生成一张完整横向4:3旅行明信片插画，画面铺满整个画布：${sceneDesc}。这是一张“宠物去了哪里、在那里怎么玩”的环境叙事图，不是宠物肖像。风景和空间必须是绝对主体，占画面约90%；宠物只是角落里偶然被看见的小小身影，占整个画面约6%-10%，完整全身，不得超过12%。具体构图：${composition}。宠物必须远离画面中心，不得放大，不得正面凝视镜头，不得用宠物身体遮挡主要风景。参考图只用于保持同一只宠物的脸型、体型、年龄感、毛色、花纹、眼睛颜色、耳朵和真实配饰。整体为清透、明亮、柔和的二维半写实动画电影插画，有自然毛发层次和丰富环境细节，但明确不是摄影照片或3D渲染。构图要有明显的近景、中景和远景，让主人第一眼先看到TA旅行的地方，第二眼才在角落发现TA。禁止宠物特写、巨大正脸、居中宠物、直视镜头、摄影棚构图、黑底、留白、边框、竖图嵌入横图、文字、水印、翅膀、光环、遗照感、阴森感、恐怖感、宠物贴纸、白色描边、喜羊羊式萌宠风格、3D塑料感。`
     const taskId = await imageGenImage(prompt, refCard)
     const result = await pollImageGenImage(taskId)
     return cropDarkFrame(result)
