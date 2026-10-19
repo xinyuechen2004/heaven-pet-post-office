@@ -167,6 +167,12 @@
     <p class="text-xs text-faint-gray mt-10 mb-4">
       远方的信不会每天到，但它会慢慢来。
     </p>
+    <button
+      class="text-[11px] text-faint-gray underline underline-offset-4 mb-2 py-2"
+      @click="restartExperience"
+    >
+      重新体验首次流程
+    </button>
   </div>
 </template>
 
@@ -211,10 +217,20 @@ function goToPostcard(id: string) {
   router.push({ name: 'postcard-detail', params: { id } })
 }
 
-onMounted(() => {
-  const newPostcard = store.checkAndGeneratePostcard()
-  if (newPostcard) {
-    store.generatePostcardText(newPostcard.id)
+function restartExperience() {
+  const confirmed = window.confirm('重新体验会清除这台设备上的宠物建档、星星和来信。确定继续吗？')
+  if (!confirmed) return
+  store.resetAllData()
+  router.replace({ name: 'landing' })
+}
+
+onMounted(async () => {
+  if (store.shouldGeneratePostcard()) {
+    try {
+      await store.generateCompletePostcard()
+    } catch {
+      // 生成失败时不保存空卡；下次进入首页时再尝试。
+    }
   }
 })
 </script>

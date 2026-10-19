@@ -953,16 +953,8 @@ async function handleComplete() {
     createdAt: new Date().toISOString(),
   })
 
-  const postcard = store.generatePostcard()
-
-  // 并行：生成文案 + 生成场景图
-  const textPromise = store.generatePostcardText(postcard.id)
-  const sceneImage = await generatePostcardScene(postcard.id, compressedCards)
-  if (sceneImage) {
-    const compressed = await store.compressImage(sceneImage, 768)
-    store.updatePostcardScene(postcard.id, compressed)
-  }
-  await textPromise
+  // 文字和场景图都完成后才投递，避免生成失败的空白卡进入来信列表。
+  const postcard = await store.generateCompletePostcard()
 
   preparingPostcard.value = false
   router.push({ name: 'postcard-detail', params: { id: postcard.id } })

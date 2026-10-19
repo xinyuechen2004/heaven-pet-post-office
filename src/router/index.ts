@@ -50,7 +50,7 @@ router.beforeEach((to) => {
   const resetForTesting = new URLSearchParams(window.location.search).get('reset') === '1'
   if (resetForTesting) {
     localStorage.removeItem('heaven-diary')
-    window.location.replace(`${window.location.origin}${window.location.pathname}#/onboarding`)
+    window.location.replace(`${window.location.origin}${window.location.pathname}#/`)
     return false
   }
 

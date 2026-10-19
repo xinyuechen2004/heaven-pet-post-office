@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { generateAiText } from '../utils/textApi'
+import { cropDarkFrame, imageGenImage, pollImageGenImage } from '../utils/imageApi'
 
 export interface PetProfile {
   name: string
@@ -44,6 +45,7 @@ export interface Postcard {
 
 export const SCENE_PROMPTS: Record<string, string> = {
   'warm-meadow': '在温暖的草地上，阳光洒落绿草如茵，远处有温柔的山丘轮廓，几朵小花点缀其间，明亮安全',
+  'post-office': '一间坐落在云边的小木邮局，门口挂着小小的铜铃，窗内亮着暖黄色灯光，四周有柔软云朵和清澈天空',
   'cloud-post-office': '云边的小邮局，木制的小房子坐落在软绵绵的云朵上，温暖的阳光透过云层洒下金色光芒',
   'star-lighthouse': '星星下的灯塔，蓝紫色夜空清透明亮，灯塔发出温暖的橘黄色光芒，海浪轻柔，整体安心治愈',
   'flower-path': '开满花的小路，两边是温柔色彩的花朵，阳光透过花瓣洒下斑驳光影，小路延伸到远方',
@@ -70,8 +72,38 @@ const POSTCARD_TEMPLATES: Omit<Postcard, 'id' | 'isFavorite' | 'date' | 'created
 
 const DATA_VERSION = 11
 
-function buildFallbackPostcardText(petName = 'TA', petType = '宠物', sceneName = '远方') {
-  return `我是${petName}，今天到了${sceneName}。这里很安静，光也很暖。我像一只小小的${petType}一样慢慢走走看看，偶尔停下来闻一闻风。请放心，我在这里过得很好，也会把一路上的小事寄给你。`
+const SCENE_TEXTS: Record<string, string> = {
+  'warm-meadow': '草叶被太阳晒得暖暖的，我找了一块最柔软的地方趴下来，听风从耳边慢慢走过去。',
+  'post-office': '小邮局的铜铃轻轻响了一声，我在窗边看着信封一封封盖上邮戳，也认真挑了一张寄给你。',
+  'forest-mailbox': '森林里的邮筒旁长了几朵小蘑菇，我绕着它们闻了好一会儿，才想起还要把今天的见闻寄出去。',
+  'star-lighthouse': '灯塔的光一圈圈掠过海面，我坐在高处看了很久，远处的小船像慢慢移动的星星。',
+  'flower-path': '这条小路两边都是花，走过时花瓣会轻轻碰到我。我挑了开得最好的一段路，想让你也看看。',
+  'moon-station': '月光车站只有一盏暖灯，我坐在长椅边听远处的车轮声，夜风很轻，一点也不冷。',
+  'glass-lake': '湖面像一块安静的玻璃，我低头时看见自己的影子也在看我，水边的小草被风吹得一晃一晃。',
+  'sunny-windowsill': '今天的窗台刚好晒到太阳，我换了好几个姿势，最后把最暖的位置留给了尾巴。',
+  'windchime-garden': '花园里的风铃一响，我就抬头找声音从哪里来。追了半天，才发现风比我跑得快。',
+  'star-boat': '小船载着几颗发亮的星星慢慢往前走，水面没有浪，我靠着船边看它们一颗颗倒映下来。',
+}
+
+function buildFallbackPostcardText(petName = 'TA', illustration = 'warm-meadow') {
+  const sceneText = SCENE_TEXTS[illustration] || SCENE_TEXTS['warm-meadow']
+  return `我是${petName}。${sceneText}我在这里好好旅行，也会把遇见的小事慢慢写给你。`
+}
+
+function bestPerspectiveForScene(illustration: string): number {
+  const mapping: Record<string, number> = {
+    'warm-meadow': 3,
+    'post-office': 0,
+    'forest-mailbox': 1,
+    'star-lighthouse': 1,
+    'flower-path': 2,
+    'moon-station': 0,
+    'glass-lake': 1,
+    'sunny-windowsill': 3,
+    'windchime-garden': 2,
+    'star-boat': 0,
+  }
+  return mapping[illustration] ?? 0
 }
 
 function generateId(): string {
@@ -107,6 +139,7 @@ export const useAppStore = defineStore('app', () => {
   const postcards = ref<Postcard[]>([])
   const onboardingCompleted = ref(false)
   const unreadPostcardId = ref<string | null>(null)
+  const postcardGenerationInProgress = ref(false)
 
   const hasPet = computed(() => !!petProfile.value)
   const starCount = computed(() => stars.value.length)
@@ -128,7 +161,8 @@ export const useAppStore = defineStore('app', () => {
         }
         petProfile.value = data.petProfile || null
         stars.value = data.stars || []
-        postcards.value = data.postcards || []
+        // 旧版本曾把图片生成失败的空卡直接保存；这些并不是有效来信。
+        postcards.value = (data.postcards || []).filter((p: Postcard) => p.sceneImage && p.frontText?.trim())
         onboardingCompleted.value = data.onboardingCompleted || false
         unreadPostcardId.value = data.unreadPostcardId || null
       }
@@ -183,7 +217,7 @@ export const useAppStore = defineStore('app', () => {
     return newStar
   }
 
-  function generatePostcard(): Postcard {
+  function createPostcardDraft(): Postcard {
     const usedIllustrations = postcards.value.map(p => p.illustration)
     const available = POSTCARD_TEMPLATES.filter(t => !usedIllustrations.includes(t.illustration))
     const template = available.length > 0
@@ -198,41 +232,86 @@ export const useAppStore = defineStore('app', () => {
       createdAt: new Date().toISOString(),
       sceneImage: null,
     }
-    postcards.value.push(postcard)
-    unreadPostcardId.value = postcard.id
-    saveToStorage()
     return postcard
+  }
+
+  function postcardTextPrompt(postcard: Postcard): string {
+    const pet = petProfile.value!
+    const traits = pet.personalityTags.length > 0 ? pet.personalityTags.join('、') : '乖巧可爱'
+    const recentStars = stars.value.slice(-3).map(s => s.text.trim()).filter(Boolean)
+    const previousTexts = postcards.value.slice(-3).map(p => p.frontText.trim()).filter(Boolean)
+    const memoryContext = recentStars.length > 0
+      ? `主人最近写下过这些片段：${recentStars.map((text, index) => `${index + 1}. ${text}`).join('；')}。可以自然回应其中一个细节，但不要逐句复述。`
+      : '主人还没有写下新的星星，这封信只记录旅途中的一个具体小发现。'
+    const avoidContext = previousTexts.length > 0
+      ? `以下是最近来信，请避免重复它们的场景、句式和安慰话：${previousTexts.join('｜')}`
+      : ''
+
+    return `你是一只名叫“${pet.name}”的${pet.type}，性格是${traits}。你正在“${postcard.location}”旅行，要给远方的主人写一张明信片。
+
+${memoryContext}
+${avoidContext}
+
+请写70—120字的中文正文：
+- 第一人称，只写一个具体、可想象的小场景或动作
+- 符合${pet.type}的真实习性和“${traits}”的性格
+- 克制、自然、有生活感，不堆砌“温暖、安心、美好”等形容词
+- 让主人感到TA在继续旅行和生活，但不要说教，不要要求主人“放下”或“好起来”
+- 不以“亲爱的主人”开头，不出现死亡、离别、天堂、等你来，也不邀请主人前往
+- 不要复用“这里很安静、光也很暖、慢慢走走看看、请放心”等模板句
+- 只输出正文，不加标题、引号或说明`
+  }
+
+  async function createPostcardText(postcard: Postcard): Promise<string> {
+    const pet = petProfile.value
+    if (!pet) throw new Error('还没有完成宠物建档')
+    try {
+      const text = await generateAiText(postcardTextPrompt(postcard))
+      const cleaned = text.trim().replace(/[【（]邮戳位置[】）]/g, '')
+      return cleaned || buildFallbackPostcardText(pet.name, postcard.illustration)
+    } catch {
+      return buildFallbackPostcardText(pet.name, postcard.illustration)
+    }
   }
 
   async function generatePostcardText(postcardId: string): Promise<void> {
     const postcard = postcards.value.find(p => p.id === postcardId)
     if (!postcard || !petProfile.value) return
 
-    const pet = petProfile.value
-    const traits = pet.personalityTags.length > 0
-      ? pet.personalityTags.join('、')
-      : '乖巧可爱'
-    const sceneName = postcard.location
+    postcard.frontText = await createPostcardText(postcard)
+    saveToStorage()
+  }
 
-    const prompt = `你是一只名叫"${pet.name}"的${pet.type}。你的性格是${traits}。你现在在"${sceneName}"这个地方旅行，正在写一张明信片给远方的主人。
+  async function createPostcardScene(postcard: Postcard): Promise<string> {
+    const cards = petProfile.value?.characterCards || []
+    if (cards.length === 0) throw new Error('缺少宠物形象资料，暂时无法生成来信')
+    const refCard = cards[bestPerspectiveForScene(postcard.illustration)] || cards[0]
+    const sceneDesc = SCENE_PROMPTS[postcard.illustration] || '在温暖明亮的自然场景中'
+    const prompt = `生成一张完整横向4:3明信片正面插画，画面铺满整个画布：${sceneDesc}。参考图中的宠物必须自然融入场景，保持同一只宠物的脸型、体型、年龄感、毛色、花纹、眼睛颜色、耳朵和真实配饰。宠物占画面约15%-22%，位于中景，以全身或大半身做符合场景的日常动作，不要巨大正脸，不要直勾勾凝视镜头。整体为清透、明亮、柔和的动画电影插画，带自然毛发结构和完整环境叙事。禁止黑底、留白、边框、竖图嵌入横图、文字、水印、翅膀、光环、遗照感、阴森感、恐怖感、宠物贴纸、白色描边、3D塑料感。`
+    const taskId = await imageGenImage(prompt, refCard)
+    const result = await pollImageGenImage(taskId)
+    return cropDarkFrame(result)
+  }
 
-请以第一人称写这张明信片的文字（最多150字，留出邮戳位置）：
-- 结合${pet.type}的习性来写（比如猫会爬高、追逐光点、揣手；狗会撒欢跑、摇尾巴、闻来嗅去；兔子会蹦跳、耳朵灵敏等）
-- 体现出"${traits}"的性格特点
-- 描述在这个地方的所见所感
-- 文风克制平实，简洁自然，不要过多修饰
-- 整体温暖明亮、安心平静，让主人知道你过得很好，帮助主人感到放心和释然
-- 不要以"亲爱的主人"开头，不要出现"你来了"、"等你来"等邀请主人的话语
-- 不要出现任何伤感、思念、遗憾的话语，不要让主人想起离别`
-
+  async function generateCompletePostcard(): Promise<Postcard> {
+    if (postcardGenerationInProgress.value) throw new Error('明信片正在路上')
+    postcardGenerationInProgress.value = true
     try {
-      const text = await generateAiText(prompt)
-      const cleaned = text.trim().replace(/[【（]邮戳位置[】）]/g, '')
-      postcard.frontText = cleaned || buildFallbackPostcardText(pet.name, pet.type, sceneName)
+      const postcard = createPostcardDraft()
+      const [frontText, rawScene] = await Promise.all([
+        createPostcardText(postcard),
+        createPostcardScene(postcard),
+      ])
+      const sceneImage = await compressImage(rawScene, 768)
+      if (!sceneImage) throw new Error('明信片图片没有生成成功，请稍后再试')
+      postcard.frontText = frontText
+      postcard.sceneImage = sceneImage
+      postcards.value.push(postcard)
+      unreadPostcardId.value = postcard.id
       saveToStorage()
-    } catch {
-      postcard.frontText = buildFallbackPostcardText(pet.name, pet.type, sceneName)
-      saveToStorage()
+      return postcard
+    } finally {
+      postcardGenerationInProgress.value = false
     }
   }
 
@@ -259,8 +338,8 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
-  function checkAndGeneratePostcard(): Postcard | null {
-    if (!onboardingCompleted.value) return null
+  function shouldGeneratePostcard(): boolean {
+    if (!onboardingCompleted.value || postcardGenerationInProgress.value) return false
 
     const pcCount = postcards.value.length
     const petDate = petProfile.value?.createdAt
@@ -269,13 +348,13 @@ export const useAppStore = defineStore('app', () => {
     const daysSincePet = (Date.now() - petDate) / (1000 * 60 * 60 * 24)
 
     // 第1天：建档后立刻来
-    if (pcCount === 0) return generatePostcard()
+    if (pcCount === 0) return true
 
     // 第2天：第二张
-    if (pcCount === 1 && daysSincePet >= 2) return generatePostcard()
+    if (pcCount === 1 && daysSincePet >= 2) return true
 
     // 第4天：第三张
-    if (pcCount === 2 && daysSincePet >= 4) return generatePostcard()
+    if (pcCount === 2 && daysSincePet >= 4) return true
 
     if (pcCount >= 3) {
       const last = postcards.value.reduce((a, b) =>
@@ -285,25 +364,34 @@ export const useAppStore = defineStore('app', () => {
 
       // 第5-20天：每隔3-5天随机
       if (daysSincePet <= 20) {
-        if (daysSinceLast < 3) return null
-        if (daysSinceLast >= 5) return generatePostcard()
-        if (Math.random() < (daysSinceLast - 3) / 2) return generatePostcard()
+        if (daysSinceLast < 3) return false
+        if (daysSinceLast >= 5) return true
+        if (Math.random() < (daysSinceLast - 3) / 2) return true
       }
       // 第21天以后：每隔5-7天随机
       else if (daysSincePet <= 30) {
-        if (daysSinceLast < 5) return null
-        if (daysSinceLast >= 7) return generatePostcard()
-        if (Math.random() < (daysSinceLast - 5) / 2) return generatePostcard()
+        if (daysSinceLast < 5) return false
+        if (daysSinceLast >= 7) return true
+        if (Math.random() < (daysSinceLast - 5) / 2) return true
       }
       // 30天以后：每隔7-10天随机
       else {
-        if (daysSinceLast < 7) return null
-        if (daysSinceLast >= 10) return generatePostcard()
-        if (Math.random() < (daysSinceLast - 7) / 3) return generatePostcard()
+        if (daysSinceLast < 7) return false
+        if (daysSinceLast >= 10) return true
+        if (Math.random() < (daysSinceLast - 7) / 3) return true
       }
     }
 
-    return null
+    return false
+  }
+
+  function resetAllData() {
+    localStorage.removeItem('heaven-diary')
+    petProfile.value = null
+    stars.value = []
+    postcards.value = []
+    onboardingCompleted.value = false
+    unreadPostcardId.value = null
   }
 
   loadFromStorage()
@@ -314,19 +402,21 @@ export const useAppStore = defineStore('app', () => {
     postcards,
     onboardingCompleted,
     unreadPostcardId,
+    postcardGenerationInProgress,
     hasPet,
     starCount,
     favoritePostcards,
     unreadPostcard,
     savePetProfile,
     addStar,
-    generatePostcard,
+    generateCompletePostcard,
     toggleFavorite,
     markPostcardRead,
     updatePostcardScene,
-    checkAndGeneratePostcard,
+    shouldGeneratePostcard,
     generatePostcardText,
     loadFromStorage,
     compressImage,
+    resetAllData,
   }
 })
