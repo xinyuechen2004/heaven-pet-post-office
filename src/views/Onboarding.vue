@@ -303,7 +303,7 @@
                 <img
                   v-if="characterCards[idx]"
                   :src="characterCards[idx]"
-                  class="w-full h-full object-cover"
+                  class="w-full h-full object-contain"
                   alt=""
                 />
                 <div v-else class="w-full h-full flex items-center justify-center text-xs text-soft-gray">
@@ -357,7 +357,7 @@
                 <img
                   v-if="characterCards[idx]"
                   :src="characterCards[idx]"
-                  class="w-full h-full object-cover bg-linen/30"
+                  class="w-full h-full object-contain bg-linen/30"
                   alt=""
                 />
                 <div v-else class="w-full h-full flex items-center justify-center text-xs text-soft-gray bg-linen">
@@ -616,6 +616,38 @@ function splitImageGrid(dataUrl: string, rows = 2, cols = 2): Promise<string[]> 
   })
 }
 
+function hasCompleteSubjectMargin(dataUrl: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = img.width
+      canvas.height = img.height
+      const ctx = canvas.getContext('2d')
+      if (!ctx) { resolve(false); return }
+      ctx.drawImage(img, 0, 0)
+      const pixels = ctx.getImageData(0, 0, img.width, img.height).data
+      const marginX = Math.max(5, Math.floor(img.width * 0.035))
+      const marginY = Math.max(5, Math.floor(img.height * 0.035))
+      let edgePixels = 0
+      let nonWhiteEdgePixels = 0
+
+      for (let y = 0; y < img.height; y++) {
+        for (let x = 0; x < img.width; x++) {
+          if (x >= marginX && x < img.width - marginX && y >= marginY && y < img.height - marginY) continue
+          edgePixels++
+          const i = (y * img.width + x) * 4
+          const isWhite = pixels[i] > 242 && pixels[i + 1] > 242 && pixels[i + 2] > 242
+          if (!isWhite) nonWhiteEdgePixels++
+        }
+      }
+      resolve(nonWhiteEdgePixels / Math.max(edgePixels, 1) < 0.012)
+    }
+    img.onerror = () => resolve(false)
+    img.src = dataUrl
+  })
+}
+
 function cropDarkFrame(dataUrl: string): Promise<string> {
   return new Promise((resolve) => {
     const img = new Image()
@@ -754,7 +786,7 @@ async function startGenerateAvatar() {
 async function generateAvatar() {
   try {
     const mainPhoto = photos.value[0].base64
-    const prompt = `根据参考照片生成一张方形画布里的彩色写实宠物半身肖像插画，不是圆形头像贴纸。宠物头部、双耳、脖子和照片中真实存在的配饰必须完整出现在画面里，四周留少量浅色背景，不要裁切耳朵。严格保持原图真实比例：眼睛大小、眼距、脸型、耳朵角度、鼻口位置、胖瘦、年龄感、真实毛色、花纹位置。只保留照片里真实存在的配饰，禁止新增铃铛、吊坠、牌子、项圈或蝴蝶结。线条清晰但完整全彩上色，有自然毛发纹理，不要夸张可爱化。禁止黑白线稿、素描、铅笔稿、美化、萌化、大眼、圆脸、幼态、Q版、3D、拟人、夸张表情、白色描边、贴纸边、文字、水印。`
+    const prompt = `根据参考照片生成一张正方形画布里的二维半写实宠物肖像插画。风格像温柔动画电影中的手绘宠物：有清晰自然的毛发层次和真实身份特征，但一眼能看出是精致插画，绝不能像真实摄影照片，也不是喜羊羊式、儿童绘本式或夸张萌宠卡通。宠物在画面正中央，头部、双耳、脖子和照片中真实存在的配饰必须完整出现，四周至少保留10%的浅色安全边距，绝不裁切耳朵。严格保持原图真实比例：眼睛大小、眼距、脸型、耳朵角度、鼻口位置、胖瘦、年龄感、真实毛色和花纹位置。只保留照片里真实存在的配饰。完整全彩上色，细腻二维手绘质感。禁止照片级写实、摄影棚照片、3D渲染、黑白线稿、素描、萌化、大眼、圆脸、幼态、Q版、拟人、夸张表情、白色描边、贴纸边、文字、水印、新增配饰。`
     const taskId = await imageGenImage(prompt, mainPhoto)
     generatingText.value = '正在勾勒 TA 的轮廓...'
     const result = await pollImageGenImage(taskId)
@@ -797,7 +829,7 @@ async function handleFineTune() {
       }
     }
     if (changes.length) prompt += changes.join('，') + '。'
-    prompt += '保持彩色写实宠物插画风格，只按参考图修正。线条清晰但必须完整全彩上色。保留眼睛大小、眼距、脸型、耳朵角度、鼻口位置、胖瘦、年龄感、毛色、花纹位置和照片中真实存在的配饰。只保留照片里真实存在的配饰，禁止新增铃铛、吊坠、牌子、项圈或蝴蝶结。禁止黑白线稿、素描、铅笔稿、美化、萌化、大眼、圆脸、幼态、Q版、3D、白色描边、贴纸边。'
+    prompt += '保持二维半写实手绘宠物插画风格，只按参考图修正。要有自然毛发层次，但不能变成真实照片或3D渲染，也不能变成喜羊羊式、儿童绘本式、夸张萌宠卡通。宠物居中，双耳完整，四周保留安全边距。保留眼睛大小、眼距、脸型、耳朵角度、鼻口位置、胖瘦、年龄感、毛色、花纹位置和照片中真实存在的配饰。禁止新增配饰、黑白线稿、素描、萌化、大眼、圆脸、幼态、Q版、白色描边、贴纸边。'
 
     const taskId = await imageGenImage(prompt, avatarResult.value!)
     const result = await pollImageGenImage(taskId)
@@ -824,7 +856,7 @@ async function generateCharacterCards() {
     const lightStyleRef = confirmedAvatarRef
       ? await store.compressImage(confirmedAvatarRef, 512)
       : null
-    const prompt = `参考图1是用户上传的真实宠物照片，是身份最高优先级；参考图2如有，是已确认头像，只能参考线条和上色风格，不能覆盖参考图1的真实身份。生成一张 2x2 四宫格彩色姿态参考图：左上微侧正坐、右上侧面站立、左下自然小跑、右下侧身趴着。四格必须是同一只宠物、同一物种/品种感、同一年龄、同一体型比例、同一五官比例、同一毛色、同一花纹/斑点/渐层/特殊标记、同一真实存在的配饰。不要把宠物画成另一只动物；不要凭想象加深、改色、换纹路、换脸、换品种。每格只画宠物本体，完整头到尾，纯白背景，自然边缘。风格为清晰全彩写实插画，可融入后续明信片场景，但不要Q版化。绝对禁止任何外轮廓描边或贴纸边，包括白边、黄边、绿边、青色边、RGB错位边、荧光边、光晕边、抠图边；禁止底座、毯子、地面、椭圆阴影、道具、文字、边框、黑白线稿、3D、怪物化、萌化、大眼幼态、新增配饰。`
+    const prompt = `参考图1是用户上传的真实宠物照片，是身份最高优先级；参考图2如有，是已确认头像，只能参考二维手绘风格，不能覆盖参考图1的真实身份。生成一张严格的2x2四宫格姿态参考图，四个格子必须等大、正方形，以清晰白色分隔线隔开。左上微侧正坐、右上侧面站立、左下自然小跑、右下侧身趴着。每一格都必须把同一只宠物从双耳到四爪和尾巴完整画在格子内部，宠物在正方形正中央，最长边只占格子约70%，四周至少保留12%的纯白安全边距；任何耳朵、脚、尾巴、身体都不得触碰或越过格子边缘，不得跨格，不得裁切。四格保持同一年龄、体型、五官比例、毛色、花纹、特殊标记和真实配饰。风格必须与已确认头像一致：精致二维半写实手绘宠物插画，有自然毛发层次但明确不是摄影照片、不是3D，也不是喜羊羊式、儿童绘本式或夸张萌宠卡通。每格纯白背景，只画宠物本体。禁止照片级写实、摄影棚照片、Q版、萌化、大眼幼态、黑白线稿、底座、地面、阴影、道具、文字、边框、白边、贴纸边、荧光边、光晕边、新增配饰。`
 
     const taskId = await imageGenImage(prompt, lightIdentityRef, lightStyleRef ? [lightStyleRef] : [])
     const sheet = await pollImageGenImage(taskId)
@@ -833,6 +865,12 @@ async function generateCharacterCards() {
     if (generatedCards.length !== 4) {
       characterCards.value = []
       cardError.value = `四视角需要完整生成 4 张，目前成功 ${generatedCards.length}/4。请重试，或先返回调整头像描述。`
+      return
+    }
+    const marginsAreSafe = await Promise.all(generatedCards.map(hasCompleteSubjectMargin))
+    if (marginsAreSafe.some(isSafe => !isSafe)) {
+      characterCards.value = []
+      cardError.value = '这次有视角裁切了耳朵、脚或尾巴，已自动拦截。请重新生成，直到四张都完整出现在正方形画框内。'
       return
     }
     characterCards.value = generatedCards
@@ -866,12 +904,17 @@ async function regenerateSelectedCards() {
     const lightStyleRef = confirmedAvatarRef
       ? await store.compressImage(confirmedAvatarRef, 512)
       : null
-    const prompt = `参考图1是用户上传的真实宠物照片，是身份最高优先级；参考图2如有，只能参考线条和上色风格。按用户修改要求重新生成一张 2x2 四宫格彩色姿态参考图：${tunePrompt.value.trim()}。如果修改要求与真实照片冲突，以参考图1为准。四格必须是同一只宠物、同一物种/品种感、同一年龄、同一体型比例、同一五官比例、同一毛色、同一花纹/斑点/渐层/特殊标记、同一真实存在的配饰。不要把宠物画成另一只动物；不要凭想象加深、改色、换纹路、换脸、换品种。四格顺序：左上微侧正坐，右上侧面站立，左下自然小跑，右下侧身趴着。每格只画宠物本体，完整头到尾，纯白背景，自然边缘。风格为清晰全彩写实插画，可融入后续明信片场景。绝对禁止任何外轮廓描边或贴纸边，包括白边、黄边、绿边、青色边、RGB错位边、荧光边、光晕边、抠图边；禁止底座、毯子、地面、椭圆阴影、道具、文字、边框、黑白线稿、3D、怪物化、萌化、大眼幼态、新增配饰。`
+    const prompt = `参考图1是用户上传的真实宠物照片，是身份最高优先级；参考图2如有，只能参考二维手绘风格。按用户修改要求重新生成严格的2x2四宫格姿态参考图：${tunePrompt.value.trim()}。如果修改要求与真实照片冲突，以参考图1为准。四个格子必须等大、正方形，以白色分隔线隔开；顺序为左上微侧正坐、右上侧面站立、左下自然小跑、右下侧身趴着。每一格都必须将同一只宠物从双耳到四爪和尾巴完整画在正中央，最长边只占格子约70%，四周至少保留12%的纯白安全边距，任何部位不得触边、越界、跨格或裁切。保持同一年龄、体型、五官比例、毛色、花纹、特殊标记和真实配饰。风格为精致二维半写实手绘宠物插画，有自然毛发层次但明确不是摄影照片、不是3D，也不是喜羊羊式、儿童绘本式或夸张萌宠卡通。禁止照片级写实、摄影棚照片、Q版、萌化、大眼幼态、黑白线稿、底座、地面、阴影、道具、文字、边框、白边、贴纸边、光晕边、新增配饰。`
     const taskId = await imageGenImage(prompt, lightIdentityRef, lightStyleRef ? [lightStyleRef] : [])
     const sheet = await pollImageGenImage(taskId)
     characterCards.value = await splitImageGrid(sheet, 2, 2)
     cardProgress.value = characterCards.value.length
     if (characterCards.value.length !== 4) throw new Error('四视角没有完整生成，请重试')
+    const marginsAreSafe = await Promise.all(characterCards.value.map(hasCompleteSubjectMargin))
+    if (marginsAreSafe.some(isSafe => !isSafe)) {
+      characterCards.value = []
+      throw new Error('这次有视角裁切了耳朵、脚或尾巴，请重新生成')
+    }
     tuneMode.value = null
     tunePrompt.value = ''
     selectedPerspectives.value = []
