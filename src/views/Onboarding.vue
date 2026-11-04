@@ -518,7 +518,7 @@ import { useRouter } from 'vue-router'
 import { Camera, X, Loader2 } from 'lucide-vue-next'
 import { useAppStore, SCENE_PROMPTS, type PetFeatures } from '../stores/app'
 import { pickImages } from '../utils/mediaPicker'
-import { imageGenImage, pollImageGenImage } from '../utils/imageApi'
+import { generatePostcardImage, imageGenImage, pollImageGenImage } from '../utils/imageApi'
 
 const router = useRouter()
 const store = useAppStore()
@@ -951,9 +951,7 @@ async function generatePostcardScene(postcardId: string, charCards: string[]): P
   const prompt = `生成一张完整横向 4:3 明信片正面插画，画面必须铺满整个画布：${sceneDesc}。必须直接生成横向场景，不要生成竖图后放进横向黑底里。这是一张温柔、治愈、让人安心的宠物旅行明信片，不是宠物肖像照、遗照、凝视镜头的特写或恐怖氛围图。将参考图中的同一只宠物自然放进场景里，宠物面积约占画面 15%-22%，必须是全身或大半身，位于画面中景，不要占据画面中心巨大凝视用户。宠物应在场景中做轻松日常的小动作：侧身看风景、闻花、散步、趴在暖光里、抬头看星星，但不要正面直勾勾盯着镜头。必须保留宠物身份特征：眼睛大小、眼距、脸型、头身比例、胖瘦、年龄感、毛色、花纹位置、眼睛颜色、耳朵和真实存在的配饰，不能换成另一只动物。整体是统一的温柔动画电影插画风格，带一点真实毛发结构，但不要照片级写实、不要油亮皮毛、不要玻璃眼、不要模糊糊的 3D 渲染。色彩清透、明亮、柔和，光线温暖安全，有空气感和故事感。禁止阴森、压迫、诡异、恐怖、孤魂感、空洞凝视、巨大正脸、过度真实、油画厚涂、黑底、外框、边框、文字、水印、翅膀、光环、黑白线稿。`
 
   try {
-    const taskId = await imageGenImage(prompt, refCard)
-    const result = await pollImageGenImage(taskId)
-    return cropDarkFrame(result)
+    return await generatePostcardImage(prompt, refCard)
   } catch {
     return null
   }

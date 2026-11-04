@@ -18,7 +18,7 @@
           <div class="w-full rounded-card overflow-hidden bg-white" style="backface-visibility: hidden;">
             <!-- AI 生成的场景图 -->
             <div v-if="postcard.sceneImage" class="w-full aspect-[4/3]">
-              <img :src="postcard.sceneImage" class="w-full h-full object-cover" alt="" />
+              <img :src="postcard.sceneImage" class="w-full h-full object-contain" alt="宠物旅行明信片完整画面" />
             </div>
             <!-- 兜底：CSS 场景 + 头像贴纸 -->
             <template v-else>

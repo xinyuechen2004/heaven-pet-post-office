@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { generateAiText } from '../utils/textApi'
-import { cropDarkFrame, imageGenImage, pollImageGenImage } from '../utils/imageApi'
+import { generatePostcardImage } from '../utils/imageApi'
 
 export interface PetProfile {
   name: string
@@ -302,9 +302,7 @@ ${avoidContext}
     const sceneDesc = SCENE_PROMPTS[postcard.illustration] || '在温暖明亮的自然场景中'
     const composition = SCENE_COMPOSITIONS[postcard.illustration] || '宠物在画面左下角做一个自然的小动作，不要看镜头'
     const prompt = `生成一张完整横向4:3旅行明信片插画，画面铺满整个画布：${sceneDesc}。这是一张“宠物去了哪里、在那里怎么玩”的环境叙事图，不是宠物肖像。风景和空间必须是绝对主体，占画面约90%；宠物只是角落里偶然被看见的小小身影，占整个画面约6%-10%，完整全身，不得超过12%。具体构图：${composition}。宠物必须远离画面中心，不得放大，不得正面凝视镜头，不得用宠物身体遮挡主要风景。参考图只用于保持同一只宠物的脸型、体型、年龄感、毛色、花纹、眼睛颜色、耳朵和真实配饰。整体为清透、明亮、柔和的二维半写实动画电影插画，有自然毛发层次和丰富环境细节，但明确不是摄影照片或3D渲染。构图要有明显的近景、中景和远景，让主人第一眼先看到TA旅行的地方，第二眼才在角落发现TA。禁止宠物特写、巨大正脸、居中宠物、直视镜头、摄影棚构图、黑底、留白、边框、竖图嵌入横图、文字、水印、翅膀、光环、遗照感、阴森感、恐怖感、宠物贴纸、白色描边、喜羊羊式萌宠风格、3D塑料感。`
-    const taskId = await imageGenImage(prompt, refCard)
-    const result = await pollImageGenImage(taskId)
-    return cropDarkFrame(result)
+    return generatePostcardImage(prompt.replace('“宠物去了哪里、在那里怎么玩”', '以风景为主、宠物在角落自然活动'), refCard)
   }
 
   async function generateCompletePostcard(): Promise<Postcard> {

@@ -37,11 +37,11 @@
       >
         <div class="flex gap-4 p-4">
           <!-- 缩略图 -->
-          <div class="w-24 h-18 rounded-xl overflow-hidden flex-shrink-0 bg-linen">
+          <div class="w-24 aspect-[4/3] rounded-xl overflow-hidden flex-shrink-0 bg-linen">
             <img
               v-if="postcard.sceneImage"
               :src="postcard.sceneImage"
-              class="w-full h-full object-cover"
+              class="w-full h-full object-contain"
               alt=""
             />
             <PostcardIllustration v-else :type="postcard.illustration" />
