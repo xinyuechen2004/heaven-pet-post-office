@@ -101,11 +101,16 @@ export async function generatePostcardImage(prompt: string, reference: string): 
   if (dark / (64 * 48) > 0.65) {
     throw new Error('这次没有生成完整的旅行背景，未保存，请重新生成')
   }
-  const ratio = image.width / image.height
-  if (ratio < 1.2 || ratio > 1.5) {
-    throw new Error('这次生成的画面不是横版明信片，未保存，请重试')
-  }
-  return result
+  // 输出比例不稳定时完整适配到横版纸面，不裁切、不拉伸、不再阻断建档。
+  canvas.width = 1024
+  canvas.height = 768
+  ctx.fillStyle = '#faf6ef'
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
+  const scale = Math.min(canvas.width / image.width, canvas.height / image.height)
+  const width = image.width * scale
+  const height = image.height * scale
+  ctx.drawImage(image, (canvas.width - width) / 2, (canvas.height - height) / 2, width, height)
+  return canvas.toDataURL('image/jpeg', 0.94)
 }
 
 export async function imageGeneration(prompt: string): Promise<string> {

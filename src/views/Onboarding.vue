@@ -504,8 +504,8 @@
             >
               {{ preparingPostcard ? '正在准备...' : '我认出来了' }}
             </button>
-            <p v-if="prepareError" class="text-sm text-dusty-rose text-center mt-3">{{ prepareError }}</p>
           </div>
+          <p v-if="prepareError" role="alert" class="text-sm text-dusty-rose text-center mt-3 leading-relaxed">{{ prepareError }}</p>
         </div>
       </template>
     </div>
@@ -915,6 +915,7 @@ async function generatePostcardScene(postcardId: string, charCards: string[]): P
 }
 
 async function handleComplete() {
+  if (preparingPostcard.value) return
   if (!hasCompleteCharacterCards.value) {
     step.value = 5
     cardError.value = '需要先完整生成 4 张视角图，才能完成建档。'
