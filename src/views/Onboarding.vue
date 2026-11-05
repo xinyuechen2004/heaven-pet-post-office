@@ -616,38 +616,6 @@ function splitImageGrid(dataUrl: string, rows = 2, cols = 2): Promise<string[]> 
   })
 }
 
-function hasCompleteSubjectMargin(dataUrl: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    const img = new Image()
-    img.onload = () => {
-      const canvas = document.createElement('canvas')
-      canvas.width = img.width
-      canvas.height = img.height
-      const ctx = canvas.getContext('2d')
-      if (!ctx) { resolve(false); return }
-      ctx.drawImage(img, 0, 0)
-      const pixels = ctx.getImageData(0, 0, img.width, img.height).data
-      const marginX = Math.max(5, Math.floor(img.width * 0.035))
-      const marginY = Math.max(5, Math.floor(img.height * 0.035))
-      let edgePixels = 0
-      let nonWhiteEdgePixels = 0
-
-      for (let y = 0; y < img.height; y++) {
-        for (let x = 0; x < img.width; x++) {
-          if (x >= marginX && x < img.width - marginX && y >= marginY && y < img.height - marginY) continue
-          edgePixels++
-          const i = (y * img.width + x) * 4
-          const isWhite = pixels[i] > 242 && pixels[i + 1] > 242 && pixels[i + 2] > 242
-          if (!isWhite) nonWhiteEdgePixels++
-        }
-      }
-      resolve(nonWhiteEdgePixels / Math.max(edgePixels, 1) < 0.012)
-    }
-    img.onerror = () => resolve(false)
-    img.src = dataUrl
-  })
-}
-
 function cropDarkFrame(dataUrl: string): Promise<string> {
   return new Promise((resolve) => {
     const img = new Image()
@@ -844,10 +812,10 @@ async function handleFineTune() {
 }
 
 async function generateCharacterCards() {
+  if (generatingCards.value) return
   generatingCards.value = true
   cardError.value = ''
   cardProgress.value = 0
-  characterCards.value = []
   try {
     const originalPhotoRef = photos.value[0]?.base64
     const confirmedAvatarRef = avatarResult.value
@@ -863,16 +831,10 @@ async function generateCharacterCards() {
     const generatedCards = await splitImageGrid(sheet, 2, 2)
     cardProgress.value = generatedCards.length
     if (generatedCards.length !== 4) {
-      characterCards.value = []
       cardError.value = `四视角需要完整生成 4 张，目前成功 ${generatedCards.length}/4。请重试，或先返回调整头像描述。`
       return
     }
-    const marginsAreSafe = await Promise.all(generatedCards.map(hasCompleteSubjectMargin))
-    if (marginsAreSafe.some(isSafe => !isSafe)) {
-      characterCards.value = []
-      cardError.value = '这次有视角裁切了耳朵、脚或尾巴，已自动拦截。请重新生成，直到四张都完整出现在正方形画框内。'
-      return
-    }
+    // 只在完整结果读取成功后替换旧图；边缘颜色不能判断身体是否完整。
     characterCards.value = generatedCards
   } catch (e: any) {
     cardError.value = friendlyImageError(e, '四视角没有生成成功，请稍后再试。')
@@ -899,7 +861,6 @@ async function regenerateSelectedCards() {
 
   try {
     cardProgress.value = 0
-    characterCards.value = []
     const lightIdentityRef = await store.compressImage(primaryIdentityRef!, 768)
     const lightStyleRef = confirmedAvatarRef
       ? await store.compressImage(confirmedAvatarRef, 512)
@@ -907,14 +868,10 @@ async function regenerateSelectedCards() {
     const prompt = `参考图1是用户上传的真实宠物照片，是身份最高优先级；参考图2如有，只能参考二维手绘风格。按用户修改要求重新生成严格的2x2四宫格姿态参考图：${tunePrompt.value.trim()}。如果修改要求与真实照片冲突，以参考图1为准。四个格子必须等大、正方形，以白色分隔线隔开；顺序为左上微侧正坐、右上侧面站立、左下自然小跑、右下侧身趴着。每一格都必须将同一只宠物从双耳到四爪和尾巴完整画在正中央，最长边只占格子约70%，四周至少保留12%的纯白安全边距，任何部位不得触边、越界、跨格或裁切。保持同一年龄、体型、五官比例、毛色、花纹、特殊标记和真实配饰。风格为精致二维半写实手绘宠物插画，有自然毛发层次但明确不是摄影照片、不是3D，也不是喜羊羊式、儿童绘本式或夸张萌宠卡通。禁止照片级写实、摄影棚照片、Q版、萌化、大眼幼态、黑白线稿、底座、地面、阴影、道具、文字、边框、白边、贴纸边、光晕边、新增配饰。`
     const taskId = await imageGenImage(prompt, lightIdentityRef, lightStyleRef ? [lightStyleRef] : [])
     const sheet = await pollImageGenImage(taskId)
-    characterCards.value = await splitImageGrid(sheet, 2, 2)
-    cardProgress.value = characterCards.value.length
-    if (characterCards.value.length !== 4) throw new Error('四视角没有完整生成，请重试')
-    const marginsAreSafe = await Promise.all(characterCards.value.map(hasCompleteSubjectMargin))
-    if (marginsAreSafe.some(isSafe => !isSafe)) {
-      characterCards.value = []
-      throw new Error('这次有视角裁切了耳朵、脚或尾巴，请重新生成')
-    }
+    const generatedCards = await splitImageGrid(sheet, 2, 2)
+    cardProgress.value = generatedCards.length
+    if (generatedCards.length !== 4) throw new Error('四视角没有完整生成，请重试')
+    characterCards.value = generatedCards
     tuneMode.value = null
     tunePrompt.value = ''
     selectedPerspectives.value = []
