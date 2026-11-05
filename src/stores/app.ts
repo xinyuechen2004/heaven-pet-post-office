@@ -342,6 +342,13 @@ ${avoidContext}
     }
   }
 
+  async function regeneratePostcardScene(postcardId: string) {
+    const card = postcards.value.find(p => p.id === postcardId)
+    if (!card) throw new Error('明信片找不到了')
+    const image = await createPostcardScene(card)
+    updatePostcardScene(postcardId, await compressImage(image, 768))
+  }
+
   function updatePostcardScene(postcardId: string, sceneImage: string) {
     const card = postcards.value.find(p => p.id === postcardId)
     if (card) {
@@ -425,6 +432,7 @@ ${avoidContext}
     toggleFavorite,
     markPostcardRead,
     updatePostcardScene,
+    regeneratePostcardScene,
     shouldGeneratePostcard,
     generatePostcardText,
     loadFromStorage,

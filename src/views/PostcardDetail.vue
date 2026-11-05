@@ -118,8 +118,15 @@
       </div>
     </div>
 
+    <div v-if="postcard" class="max-w-sm mx-auto w-full mt-4 text-center">
+      <button :disabled="regenerating" class="text-sm text-warm-orange disabled:opacity-50" @click="regenerateImage">
+        {{ regenerating ? '正在重新绘制旅行场景…' : '重新生成这张画面' }}
+      </button>
+      <p v-if="imageError" class="mt-2 text-xs text-dusty-rose">{{ imageError }}</p>
+    </div>
+
     <!-- 未找到 -->
-    <div v-else class="flex-1 flex items-center justify-center">
+    <div v-if="!postcard" class="flex-1 flex items-center justify-center">
       <p class="text-soft-gray text-sm">明信片找不到了</p>
     </div>
   </div>
@@ -135,6 +142,22 @@ import PostcardIllustration from '../components/PostcardIllustration.vue'
 const route = useRoute()
 const store = useAppStore()
 const isFlipped = ref(false)
+const regenerating = ref(false)
+const imageError = ref('')
+
+async function regenerateImage() {
+  if (regenerating.value) return
+  regenerating.value = true
+  imageError.value = ''
+  try {
+    await store.regeneratePostcardScene(postcardId)
+    isFlipped.value = false
+  } catch (error) {
+    imageError.value = error instanceof Error ? error.message : '重新生成失败，原画面已保留'
+  } finally {
+    regenerating.value = false
+  }
+}
 
 const postcardId = route.params.id as string
 const postcard = ref(store.postcards.find(p => p.id === postcardId) || null)
